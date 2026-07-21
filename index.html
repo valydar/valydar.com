@@ -4,27 +4,1097 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Valydar — Identity Verification Platform</title>
+<meta name="description" content="Single API for document verification, biometrics, KYC, AML, and fraud detection. Developer-first, usage-based pricing.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🛡️</text></svg>">
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  :root{--accent:#6366f1;--bg:#0a0a0f;--text:#e4e4ed;--muted:#8888a0;--font:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
-  body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:24px}
-  .logo{font-size:48px;font-weight:800;margin-bottom:8px;letter-spacing:-1px}
-  .logo span{color:var(--accent)}
-  h1{font-size:clamp(28px,5vw,48px);font-weight:700;margin-bottom:16px;line-height:1.2}
-  p{color:var(--muted);font-size:clamp(16px,2vw,18px);max-width:500px;margin-bottom:32px;line-height:1.6}
-  .status{display:inline-block;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:var(--accent);padding:8px 20px;border-radius:999px;font-size:14px;font-weight:600;margin-bottom:32px}
-  .links{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
-  .links a{color:var(--muted);text-decoration:none;font-size:14px;transition:color .2s;padding:8px 16px;border:1px solid #2a2a3a;border-radius:8px}
-  .links a:hover{color:var(--text);border-color:var(--accent)}
-  .badge{margin-top:48px;color:var(--muted);font-size:12px;opacity:.6}
+  :root{
+    --accent:#6366f1;--accent-light:#818cf8;--accent-dark:#4f46e5;
+    --bg:#0a0a0f;--bg-alt:#111119;--surface:#16161f;--surface-light:#1e1e2a;
+    --border:#2a2a3a;--text:#e4e4ed;--muted:#8888a0;--white:#fff;
+    --success:#22c55e;--error:#ef4444;
+    --font:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --mono:'SF Mono','Cascadia Code','Fira Code',monospace;
+    --max-w:1200px;--radius:12px;
+  }
+  html{scroll-behavior:smooth}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-light);text-decoration:none;transition:color .2s}
+  a:hover{color:var(--white)}
+  img{max-width:100%;display:block}
+
+  /* ── NAV ── */
+  nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(10,10,15,.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between}
+  .nav-logo{font-size:20px;font-weight:700;color:var(--white);display:flex;align-items:center;gap:8px}
+  .nav-logo span{color:var(--accent)}
+  .nav-links{display:flex;gap:32px;align-items:center}
+  .nav-links a{color:var(--muted);font-size:14px;font-weight:500;transition:color .2s}
+  .nav-links a:hover{color:var(--white)}
+  .nav-cta{background:var(--accent);color:var(--white)!important;padding:8px 20px;border-radius:8px;font-weight:600;transition:background .2s}
+  .nav-cta:hover{background:var(--accent-dark)}
+
+  /* ── HERO ── */
+  .hero{padding:160px 24px 100px;text-align:center;position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(99,102,241,.15) 0%,transparent 70%);pointer-events:none}
+  .hero-badge{display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 16px;font-size:13px;color:var(--muted);margin-bottom:24px}
+  .hero h1{font-size:clamp(36px,6vw,64px);font-weight:800;line-height:1.1;color:var(--white);margin-bottom:20px}
+  .hero h1 em{font-style:normal;color:var(--accent)}
+  .hero p{font-size:clamp(16px,2vw,20px);color:var(--muted);max-width:640px;margin:0 auto 40px}
+  .hero-buttons{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+  .btn-primary{background:var(--accent);color:var(--white)}
+  .btn-primary:hover{background:var(--accent-dark);color:var(--white);transform:translateY(-1px)}
+  .btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+  .btn-secondary:hover{border-color:var(--accent);color:var(--white)}
+
+  /* ── LOGOS ── */
+  .logos{padding:40px 24px 60px;text-align:center}
+  .logos p{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:2px;margin-bottom:24px}
+  .logos-grid{display:flex;justify-content:center;gap:48px;flex-wrap:wrap;opacity:.5}
+  .logos-grid span{font-size:18px;font-weight:700;color:var(--muted);letter-spacing:1px}
+
+  /* ── SECTION ── */
+  section{padding:80px 24px}
+  .section-inner{max-width:var(--max-w);margin:0 auto}
+  .section-label{color:var(--accent);font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px}
+  .section-title{font-size:clamp(28px,4vw,42px);font-weight:700;color:var(--white);line-height:1.2;margin-bottom:16px}
+  .section-title em{font-style:normal;color:var(--accent)}
+  .section-desc{color:var(--muted);font-size:17px;max-width:600px;margin-bottom:48px}
+  .section-desc.centered{margin-left:auto;margin-right:auto;text-align:center}
+
+  /* ── FEATURES GRID ── */
+  .features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
+  .feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px;transition:border-color .3s,transform .3s}
+  .feature-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .feature-icon{width:48px;height:48px;background:rgba(99,102,241,.1);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:20px}
+  .feature-card h3{font-size:18px;font-weight:600;color:var(--white);margin-bottom:12px}
+  .feature-card p{color:var(--muted);font-size:14px;line-height:1.7}
+  .feature-card ul{list-style:none;margin-top:12px}
+  .feature-card li{color:var(--muted);font-size:14px;padding:4px 0;padding-left:20px;position:relative}
+  .feature-card li::before{content:'→';position:absolute;left:0;color:var(--accent)}
+
+  /* ── HOW IT WORKS ── */
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:32px;counter-reset:step}
+  .step{counter-increment:step;position:relative;padding:24px 0}
+  .step-num{font-size:64px;font-weight:800;color:var(--surface-light);line-height:1;margin-bottom:16px}
+  .step-num::after{content:counter(step);position:absolute;top:0;left:0;color:var(--accent);font-size:64px;font-weight:800;opacity:.6}
+  .step h3{font-size:17px;font-weight:600;color:var(--white);margin-bottom:8px}
+  .step p{color:var(--muted);font-size:14px}
+
+  /* ── DOCUMENTS ── */
+  .docs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+  .doc-pill{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:13px;color:var(--text);text-align:center;transition:border-color .2s;cursor:pointer}
+  .doc-pill:hover{border-color:var(--accent)}
+  .doc-pill.active{background:var(--accent);border-color:var(--accent);color:var(--white)}
+
+  /* ── TECH ── */
+  .tech-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px}
+  .tech-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;text-align:center;transition:border-color .2s}
+  .tech-item:hover{border-color:var(--accent)}
+  .tech-item .icon{font-size:32px;margin-bottom:12px}
+  .tech-item h4{font-size:14px;font-weight:600;color:var(--white);margin-bottom:6px}
+  .tech-item p{font-size:12px;color:var(--muted)}
+
+  /* ── INTEGRATE ── */
+  .code-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .code-header{background:var(--surface-light);padding:12px 20px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+  .code-dot{width:10px;height:10px;border-radius:50%;background:var(--border)}
+  .code-dot:nth-child(1){background:#ef4444}
+  .code-dot:nth-child(2){background:#eab308}
+  .code-dot:nth-child(3){background:#22c55e}
+  .code-block pre{padding:24px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.8;color:var(--text)}
+  .code-block .kw{color:var(--accent-light)}
+  .code-block .str{color:#a5d6ff}
+  .code-block .cm{color:#6b7280}
+  .code-block .fn{color:#fbbf24}
+  .code-block .num{color:#f87171}
+
+  /* ── COMPLIANCE ── */
+  .compliance-grid{display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
+  .compliance-badge{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 28px;text-align:center;min-width:140px}
+  .compliance-badge .icon{font-size:28px;margin-bottom:8px}
+  .compliance-badge h4{font-size:13px;font-weight:600;color:var(--white)}
+  .compliance-badge p{font-size:11px;color:var(--muted);margin-top:4px}
+
+  /* ── PRICING ── */
+  .pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
+  .pricing-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:36px;position:relative;transition:border-color .2s}
+  .pricing-card:hover{border-color:var(--accent)}
+  .pricing-card.featured{border-color:var(--accent)}
+  .pricing-card.featured::before{content:'Most Popular';position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--white);font-size:11px;font-weight:700;padding:4px 12px;border-radius:999px;text-transform:uppercase;letter-spacing:1px}
+  .pricing-card h3{font-size:20px;font-weight:700;color:var(--white);margin-bottom:8px}
+  .pricing-card .price{font-size:36px;font-weight:800;color:var(--white);margin-bottom:4px}
+  .pricing-card .price span{font-size:14px;font-weight:400;color:var(--muted)}
+  .pricing-card .desc{color:var(--muted);font-size:14px;margin-bottom:24px}
+  .pricing-card ul{list-style:none;margin-bottom:28px}
+  .pricing-card li{padding:8px 0;font-size:14px;color:var(--text);display:flex;align-items:center;gap:8px}
+  .pricing-card li::before{content:'✓';color:var(--success);font-weight:700;font-size:13px}
+  .pricing-card .btn{width:100%;justify-content:center}
+
+  /* ── CTA ── */
+  .cta-section{padding:100px 24px;text-align:center;position:relative}
+  .cta-section::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(99,102,241,.1) 0%,transparent 70%);pointer-events:none}
+  .cta-section h2{font-size:clamp(28px,4vw,42px);font-weight:700;color:var(--white);margin-bottom:16px}
+  .cta-section p{color:var(--muted);font-size:17px;margin-bottom:32px}
+
+  /* ── FOOTER ── */
+  footer{border-top:1px solid var(--border);padding:48px 24px}
+  .footer-inner{max-width:var(--max-w);margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:48px}
+  .footer-brand p{color:var(--muted);font-size:14px;margin-top:12px;max-width:300px}
+  .footer-col h4{font-size:13px;font-weight:600;color:var(--white);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px}
+  .footer-col a{display:block;color:var(--muted);font-size:14px;padding:4px 0;transition:color .2s}
+  .footer-col a:hover{color:var(--white)}
+  .footer-bottom{max-width:var(--max-w);margin:32px auto 0;padding-top:24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .footer-bottom p{color:var(--muted);font-size:13px}
+
+  /* ── PIPELINE ANIMATION ── */
+  .pipeline-section{background:var(--bg-alt);padding:80px 24px 100px;overflow:hidden}
+  .pipeline-controls{display:flex;justify-content:center;gap:12px;margin-bottom:48px}
+  .pipeline-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 28px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;font-family:var(--font)}
+  .pipeline-btn:hover{border-color:var(--accent);color:var(--white)}
+  .pipeline-btn.active{background:var(--accent);border-color:var(--accent);color:var(--white)}
+  .pipeline-track{position:relative;max-width:1100px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-start;padding-top:40px}
+  .pipeline-track::before{content:'';position:absolute;top:56px;left:40px;right:40px;height:3px;background:var(--border);border-radius:2px}
+  .pipeline-progress{position:absolute;top:56px;left:40px;height:3px;background:var(--accent);border-radius:2px;width:0;transition:width .6s cubic-bezier(.4,0,.2,1);z-index:1}
+  .pipeline-step{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;flex:1;max-width:170px;opacity:.4;transition:opacity .5s ease}
+  .pipeline-step.active{opacity:1}
+  .pipeline-circle{width:36px;height:36px;border-radius:50%;background:var(--surface);border:3px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--muted);position:relative;z-index:2;transition:all .4s ease;margin-bottom:20px}
+  .pipeline-step.active .pipeline-circle{background:var(--accent);border-color:var(--accent);color:var(--white);box-shadow:0 0 20px rgba(99,102,241,.4)}
+  .pipeline-svg-wrap{width:100px;height:100px;margin-bottom:16px;position:relative}
+  .pipeline-svg{width:100%;height:100%}
+  .pipeline-badge{display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--border);color:var(--muted);margin-bottom:10px;white-space:nowrap}
+  .pipeline-step.active .pipeline-badge{border-color:var(--accent);color:var(--accent-light)}
+  .pipeline-step h4{font-size:13px;font-weight:600;color:var(--white);margin-bottom:6px}
+  .pipeline-step p{font-size:11px;color:var(--muted);line-height:1.5;padding:0 4px}
+
+  /* SVG animation states */
+  .pipeline-step .svg-el{opacity:0;transition:opacity .4s ease, transform .4s ease}
+  .pipeline-step.active .svg-el{opacity:1}
+  .pipeline-step .svg-el.d1{transition-delay:.1s}
+  .pipeline-step .svg-el.d2{transition-delay:.2s}
+  .pipeline-step .svg-el.d3{transition-delay:.3s}
+  .pipeline-step .svg-el.d4{transition-delay:.4s}
+  .pipeline-step .svg-el.d5{transition-delay:.5s}
+  .pipeline-step .svg-el.d6{transition-delay:.6s}
+  .pipeline-step .svg-el.d7{transition-delay:.7s}
+
+  /* Per-step keyframes */
+  @keyframes scanSweep{0%{transform:translateX(-20px);opacity:0}20%{opacity:1}80%{opacity:1}100%{transform:translateX(20px);opacity:0}}
+  @keyframes charAppear{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:translateY(0)}}
+  @keyframes uvPulse{0%,100%{opacity:.3}50%{opacity:1}}
+  @keyframes faceConnect{0%{stroke-dashoffset:40}100%{stroke-dashoffset:0}}
+  @keyframes shieldPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+  @keyframes checkDraw{0%{stroke-dashoffset:24}100%{stroke-dashoffset:0}}
+  @keyframes nodeGlow{0%,100%{opacity:.4;r:3}50%{opacity:1;r:4}}
+  @keyframes slideIn{0%{transform:translateX(-12px);opacity:0}100%{transform:translateX(0);opacity:1}}
+  @keyframes fadeUp{0%{transform:translateY(6px);opacity:0}100%{transform:translateY(0);opacity:1}}
+
+  .pipeline-step.active .anim-sweep{animation:scanSweep 1.2s ease-in-out infinite}
+  .pipeline-step.active .anim-char{animation:charAppear .3s ease forwards}
+  .pipeline-step.active .anim-uv{animation:uvPulse 1s ease-in-out infinite}
+  .pipeline-step.active .anim-connect{animation:faceConnect .6s ease forwards;stroke-dasharray:40;stroke-dashoffset:40}
+  .pipeline-step.active .anim-shield{animation:shieldPulse 1.5s ease-in-out infinite}
+  .pipeline-step.active .anim-check{animation:checkDraw .5s ease forwards;stroke-dasharray:24;stroke-dashoffset:24}
+  .pipeline-step.active .anim-node{animation:nodeGlow 1.2s ease-in-out infinite}
+  .pipeline-step.active .anim-slide{animation:slideIn .4s ease forwards}
+  .pipeline-step.active .anim-fade{animation:fadeUp .4s ease forwards}
+
+  /* ── RESPONSIVE ── */
+  @media(max-width:768px){
+    .nav-links{display:none}
+    .footer-inner{grid-template-columns:1fr}
+    .hero{padding:120px 24px 60px}
+    section{padding:60px 20px}
+    .pipeline-track{flex-direction:column;align-items:center;gap:32px;padding-top:0;padding-left:48px}
+    .pipeline-track::before{top:0;bottom:0;left:66px;right:auto;width:3px;height:auto}
+    .pipeline-progress{top:0;left:66px;width:3px!important;height:0!important;transition:height .6s cubic-bezier(.4,0,.2,1)}
+    .pipeline-step{flex-direction:row;text-align:left;max-width:100%;gap:16px}
+    .pipeline-circle{margin-bottom:0;flex-shrink:0}
+    .pipeline-svg-wrap{width:64px;height:64px;flex-shrink:0}
+    .pipeline-text{flex:1}
+  }
 </style>
 </head>
 <body>
-  <div class="logo"><span>◆</span> valydar</div>
-  <div class="status">Coming Soon</div>
-  <h1>Identity Verification<br>for Developers</h1>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-logo"><span>◆</span> valydar</a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#sdk">SDK</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#pricing">Pricing</a>
+    <a href="https://docs.valydar.com">Docs</a>
+    <a href="https://portal.valydar.com" class="nav-cta">Get API Key</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">Developer-first identity verification</div>
+  <h1>Fast &amp; Secure<br><em>Identity Verification</em></h1>
   <p>Single API for document verification, biometrics, KYC, AML, and fraud detection. Built for developers. Priced by usage.</p>
-  
-  <div class="badge">Valydar Software B.V. — Amsterdam</div>
+  <div class="hero-buttons">
+    <a href="#pricing" class="btn btn-primary">Get API Key</a>
+    <a href="https://docs.valydar.com" class="btn btn-secondary">Read the Docs →</a>
+  </div>
+</section>
+
+<!-- LOGOS -->
+<div class="logos">
+  <p>Trusted by teams building identity flows</p>
+  <div class="logos-grid">
+    <span>FINTECH</span>
+    <span>GAMING</span>
+    <span>HOSPITALITY</span>
+    <span>HEALTHCARE</span>
+    <span>E-COMMERCE</span>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="section-inner">
+    <div class="section-label">Why Valydar</div>
+    <h2 class="section-title">Everything you need to <em>verify identity</em></h2>
+    <p class="section-desc">One API. Document checks, biometric matching, liveness detection, KYC screening, and AML monitoring — all in a single integration.</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>5-Second Verification</h3>
+        <p>Passport scan to verified result in under 5 seconds. Optimised for mobile-first onboarding flows.</p>
+        <ul>
+          <li>Real-time OCR &amp; MRZ parsing</li>
+          <li>Automatic document classification</li>
+          <li>Works with low-quality scans</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🛡️</div>
+        <h3>Fraud Detection</h3>
+        <p>Catch sophisticated forgeries before they reach your platform. Border-level security checks on every document.</p>
+        <ul>
+          <li>Document liveness detection</li>
+          <li>AI-generated image detection</li>
+          <li>NFC chip validation</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌍</div>
+        <h3>Global Coverage</h3>
+        <p>Support for 254 countries with thousands of document templates. One API, every identity.</p>
+        <ul>
+          <li>Passports, ID cards, driver's licenses</li>
+          <li>138+ languages and scripts</li>
+          <li>New templates added weekly</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🧩</div>
+        <h3>Developer-First API</h3>
+        <p>Clean REST API with OpenAPI 3.1 spec. Client SDKs for Rust, Python, JavaScript, and more.</p>
+        <ul>
+          <li>Sub-100ms API response times</li>
+          <li>Comprehensive OpenAPI docs</li>
+          <li>Webhook callbacks for async flows</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <h3>KYC &amp; AML Screening</h3>
+        <p>Automated KYC workflows with PEP and sanctions screening. Stay compliant without the manual work.</p>
+        <ul>
+          <li>PEP &amp; watchlist screening</li>
+          <li>Sanctions list monitoring</li>
+          <li>Risk scoring &amp; case management</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💰</div>
+        <h3>Usage-Based Pricing</h3>
+        <p>Pay only for what you use. No monthly minimums, no hidden fees. Scale from prototype to production.</p>
+        <ul>
+          <li>Transparent per-verification pricing</li>
+          <li>Volume discounts available</li>
+          <li>Free sandbox for testing</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section style="background:var(--bg-alt)">
+  <div class="section-inner">
+    <div class="section-label">How It Works</div>
+    <h2 class="section-title">Three steps to <em>verified identity</em></h2>
+    <p class="section-desc">Integrate in minutes. Verify in seconds.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num"></div>
+        <h3>Upload Document</h3>
+        <p>User captures a photo of their ID document. Our API handles classification, cropping, and quality checks automatically.</p>
+      </div>
+      <div class="step">
+        <div class="step-num"></div>
+        <h3>Verify &amp; Match</h3>
+        <p>OCR extracts data, MRZ/barcode is cross-checked, security features are validated, and face matching confirms the holder.</p>
+      </div>
+      <div class="step">
+        <div class="step-num"></div>
+        <h3>Get Results</h3>
+        <p>Receive a structured JSON response with verification status, extracted data, risk score, and compliance flags — in real time.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOCUMENTS -->
+<section>
+  <div class="section-inner">
+    <div class="section-label">Supported Documents</div>
+    <h2 class="section-title">Verify <em>any ID</em> from any country</h2>
+    <p class="section-desc">Passports, ID cards, driver's licenses, visas, and more — covering 254 countries and territories.</p>
+    <div class="docs-grid">
+      <div class="doc-pill">Passport</div>
+      <div class="doc-pill">ePassport (NFC)</div>
+      <div class="doc-pill">ID Card</div>
+      <div class="doc-pill">Driver's License</div>
+      <div class="doc-pill">Visa</div>
+      <div class="doc-pill">Residence Permit</div>
+      <div class="doc-pill">Work Permit</div>
+      <div class="doc-pill">Citizenship Card</div>
+      <div class="doc-pill">Refugee Card</div>
+      <div class="doc-pill">Social Security Card</div>
+      <div class="doc-pill">Voter ID</div>
+      <div class="doc-pill">Health Insurance Card</div>
+      <div class="doc-pill">Diplomatic ID</div>
+      <div class="doc-pill">Border Cross Card</div>
+      <div class="doc-pill">Proof of Age Card</div>
+      <div class="doc-pill">Marine Licence</div>
+      <div class="doc-pill">Police Card</div>
+      <div class="doc-pill">Laissez-Passer</div>
+    </div>
+  </div>
+</section>
+
+<!-- INTEGRATE -->
+<section style="background:var(--bg-alt)">
+  <div class="section-inner" style="display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center">
+    <div>
+      <div class="section-label">Integrate in Minutes</div>
+      <h2 class="section-title">Clean API,<br><em>clear docs</em></h2>
+      <p class="section-desc">RESTful API with comprehensive OpenAPI 3.1 specification. Client libraries for your favourite language.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        <span class="doc-pill active">Rust</span>
+        <span class="doc-pill">Python</span>
+        <span class="doc-pill">JavaScript</span>
+        <span class="doc-pill">Go</span>
+        <span class="doc-pill">Java</span>
+        <span class="doc-pill">C#</span>
+      </div>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span>
+        <span style="color:var(--muted);font-size:12px;margin-left:8px" id="code-filename">verify.rs</span>
+      </div>
+      <pre id="code-rust"><span class="cm">// POST /v1/verify — verify a document</span>
+<span class="kw">let</span> result = client.<span class="fn">verify</span>(
+    <span class="str">"https://api.valydar.com/v1/verify"</span>,
+    <span class="fn">VerifyRequest</span> {
+        document_url: <span class="str">"s3://bucket/doc.jpg"</span>,
+        checks: <span class="kw">vec!</span>[
+            <span class="fn">Check</span>::DocumentIntegrity,
+            <span class="fn">Check</span>::FaceMatch,
+            <span class="fn">Check</span>::Liveness,
+        ],
+    },
+).<span class="kw">await</span>?;
+
+<span class="cm">// Result</span>
+<span class="cm">// {</span>
+<span class="cm">//   "status": "verified",</span>
+<span class="cm">//   "confidence": 0.98,</span>
+<span class="cm">//   "document_type": "passport",</span>
+<span class="cm">//   "country": "NL",</span>
+<span class="cm">//   "name": "Jane Doe",</span>
+<span class="cm">//   "expiry": "2030-05-15"</span>
+<span class="cm">// }</span></pre>
+      <pre id="code-python" style="display:none"><span class="cm"># POST /v1/verify — verify a document</span>
+result = client.<span class="fn">verify</span>(
+    <span class="str">"https://api.valydar.com/v1/verify"</span>,
+    <span class="fn">VerifyRequest</span>(
+        document_url=<span class="str">"s3://bucket/doc.jpg"</span>,
+        checks=[
+            <span class="fn">Check</span>.DOCUMENT_INTEGRITY,
+            <span class="fn">Check</span>.FACE_MATCH,
+            <span class="fn">Check</span>.LIVENESS,
+        ],
+    ),
+)
+
+<span class="cm"># Result</span>
+<span class="cm"># {</span>
+<span class="cm">#   "status": "verified",</span>
+<span class="cm">#   "confidence": 0.98,</span>
+<span class="cm">#   "document_type": "passport",</span>
+<span class="cm">#   "country": "NL",</span>
+<span class="cm">#   "name": "Jane Doe",</span>
+<span class="cm">#   "expiry": "2030-05-15"</span>
+<span class="cm"># }</span></pre>
+      <pre id="code-javascript" style="display:none"><span class="cm">// POST /v1/verify — verify a document</span>
+<span class="kw">const</span> result = <span class="kw">await</span> client.<span class="fn">verify</span>(
+  <span class="str">"https://api.valydar.com/v1/verify"</span>,
+  {
+    document_url: <span class="str">"s3://bucket/doc.jpg"</span>,
+    checks: [
+      <span class="str">"document_integrity"</span>,
+      <span class="str">"face_match"</span>,
+      <span class="str">"liveness"</span>,
+    ],
+  }
+);
+
+<span class="cm">// Result</span>
+<span class="cm">// {</span>
+<span class="cm">//   "status": "verified",</span>
+<span class="cm">//   "confidence": 0.98,</span>
+<span class="cm">//   "document_type": "passport",</span>
+<span class="cm">//   "country": "NL",</span>
+<span class="cm">//   "name": "Jane Doe",</span>
+<span class="cm">//   "expiry": "2030-05-15"</span>
+<span class="cm">// }</span></pre>
+      <pre id="code-go" style="display:none"><span class="cm">// POST /v1/verify — verify a document</span>
+result, err := client.<span class="fn">Verify</span>(
+    <span class="str">"https://api.valydar.com/v1/verify"</span>,
+    <span class="fn">VerifyRequest</span>{
+        DocumentURL: <span class="str">"s3://bucket/doc.jpg"</span>,
+        Checks: []<span class="fn">Check</span>{
+            <span class="fn">Check</span>DocumentIntegrity,
+            <span class="fn">Check</span>FaceMatch,
+            <span class="fn">Check</span>Liveness,
+        },
+    },
+)
+
+<span class="cm">// Result</span>
+<span class="cm">// {</span>
+<span class="cm">//   "status": "verified",</span>
+<span class="cm">//   "confidence": 0.98,</span>
+<span class="cm">//   "document_type": "passport",</span>
+<span class="cm">//   "country": "NL",</span>
+<span class="cm">//   "name": "Jane Doe",</span>
+<span class="cm">//   "expiry": "2030-05-15"</span>
+<span class="cm">// }</span></pre>
+      <pre id="code-java" style="display:none"><span class="cm">// POST /v1/verify — verify a document</span>
+<span class="fn">VerifyResult</span> result = client.<span class="fn">verify</span>(
+    <span class="str">"https://api.valydar.com/v1/verify"</span>,
+    <span class="kw">new</span> <span class="fn">VerifyRequest</span>()
+        .documentUrl(<span class="str">"s3://bucket/doc.jpg"</span>)
+        .checks(<span class="fn">Arrays</span>.asList(
+            <span class="fn">Check</span>.DOCUMENT_INTEGRITY,
+            <span class="fn">Check</span>.FACE_MATCH,
+            <span class="fn">Check</span>.LIVENESS
+        ))
+);
+
+<span class="cm">// Result</span>
+<span class="cm">// {</span>
+<span class="cm">//   "status": "verified",</span>
+<span class="cm">//   "confidence": 0.98,</span>
+<span class="cm">//   "document_type": "passport",</span>
+<span class="cm">//   "country": "NL",</span>
+<span class="cm">//   "name": "Jane Doe",</span>
+<span class="cm">//   "expiry": "2030-05-15"</span>
+<span class="cm">// }</span></pre>
+      <pre id="code-csharp" style="display:none"><span class="cm">// POST /v1/verify — verify a document</span>
+<span class="kw">var</span> result = <span class="kw">await</span> client.<span class="fn">VerifyAsync</span>(
+    <span class="str">"https://api.valydar.com/v1/verify"</span>,
+    <span class="kw">new</span> <span class="fn">VerifyRequest</span>
+    {
+        DocumentUrl = <span class="str">"s3://bucket/doc.jpg"</span>,
+        Checks = <span class="kw">new</span>[]
+        {
+            <span class="fn">Check</span>.DocumentIntegrity,
+            <span class="fn">Check</span>.FaceMatch,
+            <span class="fn">Check</span>.Liveness,
+        }
+    }
+);
+
+<span class="cm">// Result</span>
+<span class="cm">// {</span>
+<span class="cm">//   "status": "verified",</span>
+<span class="cm">//   "confidence": 0.98,</span>
+<span class="cm">//   "document_type": "passport",</span>
+<span class="cm">//   "country": "NL",</span>
+<span class="cm">//   "name": "Jane Doe",</span>
+<span class="cm">//   "expiry": "2030-05-15"</span>
+<span class="cm">// }</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- SDK -->
+<section id="sdk">
+  <div class="section-inner">
+    <div class="section-label">Web SDK</div>
+    <h2 class="section-title">Embed verification <em>in your app</em></h2>
+    <p class="section-desc">Drop-in JavaScript SDK with capture widgets, liveness checks, and face matching. Works in any browser — no native code needed.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start">
+      <div>
+        <div style="margin-bottom:32px">
+          <h3 style="font-size:16px;font-weight:600;color:var(--white);margin-bottom:12px">Quick Start</h3>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span>
+              <span style="color:var(--muted);font-size:12px;margin-left:8px">index.html</span>
+            </div>
+            <pre><span class="cm">&lt;!-- 1. Include the SDK --&gt;</span>
+&lt;<span class="kw">script</span> src=<span class="str">"/sdk/valydar.js"</span>&gt;&lt;/<span class="kw">script</span>&gt;
+
+<span class="cm">&lt;!-- 2. Initialise --&gt;</span>
+<span class="kw">const</span> sdk = <span class="kw">new</span> <span class="fn">Valydar</span>({
+  apiKey: <span class="str">'your-api-key'</span>,
+  apiUrl: <span class="str">'https://api.valydar.com'</span>
+});
+
+<span class="cm">// 3. Create verification</span>
+<span class="kw">const</span> v = <span class="kw">await</span> sdk.<span class="fn">createVerification</span>({
+  checks: [<span class="str">'document'</span>, <span class="str">'liveness'</span>, <span class="str">'face_match'</span>]
+});
+
+<span class="cm">// 4. Upload document</span>
+<span class="kw">const</span> doc = <span class="kw">await</span> sdk.<span class="fn">uploadDocument</span>(
+  v.id, file, <span class="str">'passport'</span>
+);
+
+<span class="cm">// 5. Upload selfie (auto liveness)</span>
+<span class="kw">const</span> sfl = <span class="kw">await</span> sdk.<span class="fn">uploadSelfie</span>(
+  v.id, selfieFile
+);
+
+<span class="cm">// 6. Face match</span>
+<span class="kw">const</span> match = <span class="kw">await</span> sdk.<span class="fn">faceMatch</span>(
+  v.id, doc.id, sfl.selfie_id
+);
+
+<span class="cm">// 7. Document liveness</span>
+<span class="kw">const</span> live = <span class="kw">await</span> sdk.<span class="fn">documentLiveness</span>(
+  v.id, doc.id
+);</pre>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <a href="https://docs.valydar.com" class="btn btn-primary" style="font-size:14px;padding:10px 24px">Read the Docs →</a>
+          <a href="https://docs.valydar.com" class="btn btn-secondary" style="font-size:14px;padding:10px 24px">SDK Reference</a>
+        </div>
+      </div>
+      <div>
+        <div style="display:grid;gap:16px">
+          <div class="feature-card" style="margin:0">
+            <div class="feature-icon">📸</div>
+            <h3>Document Capture</h3>
+            <p>Camera or file upload. Auto-crop, quality check, and MRZ extraction on upload.</p>
+          </div>
+          <div class="feature-card" style="margin:0">
+            <div class="feature-icon">🤳</div>
+            <h3>Selfie + Liveness</h3>
+            <p>6-point anti-spoofing: texture, colour, edges, noise, compression, and brightness analysis — all in one call.</p>
+          </div>
+          <div class="feature-card" style="margin:0">
+            <div class="feature-icon">🔍</div>
+            <h3>Face Match</h3>
+            <p>Biometric comparison between document photo and selfie. Hue histogram, LBP texture, and SSIM scoring.</p>
+          </div>
+          <div class="feature-card" style="margin:0">
+            <div class="feature-icon">🛡️</div>
+            <h3>Document Liveness</h3>
+            <p>Detects screen captures, printouts, and AI-generated forgeries with 6 authenticity checks.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH -->
+<section>
+  <div class="section-inner">
+    <div class="section-label">Technology</div>
+    <h2 class="section-title">Powered by <em>advanced security</em></h2>
+    <p class="section-desc centered">Multi-layered verification combining OCR, biometrics, and hardware-level security checks.</p>
+    <div class="tech-grid">
+      <div class="tech-item">
+        <div class="icon">📖</div>
+        <h4>MRZ Reading</h4>
+        <p>Machine-readable zone parsing for passports, IDs, and visas worldwide.</p>
+      </div>
+      <div class="tech-item">
+        <div class="icon">🔍</div>
+        <h4>OCR Engine</h4>
+        <p>Optical character recognition supporting 138+ languages and scripts.</p>
+      </div>
+      <div class="tech-item">
+        <div class="icon">📡</div>
+        <h4>NFC Verification</h4>
+        <p>Server-side validation of ePassport chips for tamper-proof authentication.</p>
+      </div>
+      <div class="tech-item">
+        <div class="icon">👤</div>
+        <h4>Face Matching</h4>
+        <p>Biometric comparison between document photo and live selfie capture.</p>
+      </div>
+      <div class="tech-item">
+        <div class="icon">🎭</div>
+        <h4>Liveness Detection</h4>
+        <p>Active and passive liveness checks to prevent spoofing attacks.</p>
+      </div>
+      <div class="tech-item">
+        <div class="icon">🔐</div>
+        <h4>Document Liveness</h4>
+        <p>Detects AI-generated images, screenshots, printouts, and screen captures.</p>
+      </div>
+      <div class="tech-item">
+        <div class="icon">📊</div>
+        <h4>Barcode Reading</h4>
+        <p>1D and 2D barcode parsing for cross-validation against visual data.</p>
+      </div>
+      <div class="tech-item">
+        <div class="icon">✅</div>
+        <h4>Security Features</h4>
+        <p>UV, IR, and hologram detection for advanced forgery identification.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PIPELINE ANIMATION -->
+<section class="pipeline-section" id="pipeline">
+  <div class="section-inner">
+    <div class="section-label">The Verification Pipeline</div>
+    <h2 class="section-title">How <em>modern ID validation</em> works</h2>
+    <p class="section-desc centered">From document scan to verified identity — in under 5 seconds. Whether at an airport e-gate or on a mobile phone, the process follows the same six-step pipeline.</p>
+    <div class="pipeline-controls">
+      <button class="pipeline-btn" id="pipeline-play">▶ Play</button>
+      <button class="pipeline-btn" id="pipeline-reset" style="display:none">↺ Reset</button>
+    </div>
+    <div class="pipeline-track" id="pipeline-track">
+      <div class="pipeline-progress" id="pipeline-progress"></div>
+
+      <!-- Step 1: Document Capture -->
+      <div class="pipeline-step" data-step="1">
+        <div class="pipeline-circle">1</div>
+        <div class="pipeline-text">
+          <div class="pipeline-svg-wrap">
+            <svg class="pipeline-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Phone -->
+              <rect class="svg-el d1" x="28" y="15" width="30" height="52" rx="4" stroke="#6366f1" stroke-width="2"/>
+              <rect class="svg-el d2" x="32" y="22" width="22" height="34" rx="2" fill="#1e1e2a"/>
+              <circle class="svg-el d3" cx="43" cy="62" r="2.5" stroke="#6366f1" stroke-width="1.5"/>
+              <!-- Passport -->
+              <rect class="svg-el d2" x="50" y="30" width="26" height="36" rx="2" stroke="#818cf8" stroke-width="1.5" fill="#16161f"/>
+              <line class="svg-el d3" x1="54" y1="38" x2="72" y2="38" stroke="#818cf8" stroke-width="1" opacity=".5"/>
+              <line class="svg-el d4" x1="54" y1="43" x2="68" y2="43" stroke="#818cf8" stroke-width="1" opacity=".4"/>
+              <line class="svg-el d4" x1="54" y1="48" x2="70" y2="48" stroke="#818cf8" stroke-width="1" opacity=".3"/>
+              <circle class="svg-el d5" cx="58" cy="56" r="4" stroke="#6366f1" stroke-width="1" opacity=".5"/>
+              <!-- Scan beam -->
+              <rect class="svg-el d3 anim-sweep" x="25" y="38" width="56" height="2" rx="1" fill="url(#scanGrad)" opacity=".7"/>
+              <defs><linearGradient id="scanGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#6366f1" stop-opacity="0"/><stop offset="50%" stop-color="#6366f1"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs>
+            </svg>
+          </div>
+          <span class="pipeline-badge">🌐 Both</span>
+          <h4>Document Capture</h4>
+          <p>Camera or scanner captures the ID document with real-time quality checks.</p>
+        </div>
+      </div>
+
+      <!-- Step 2: OCR & MRZ -->
+      <div class="pipeline-step" data-step="2">
+        <div class="pipeline-circle">2</div>
+        <div class="pipeline-text">
+          <div class="pipeline-svg-wrap">
+            <svg class="pipeline-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Document outline -->
+              <rect class="svg-el d1" x="15" y="18" width="52" height="36" rx="3" stroke="#818cf8" stroke-width="1.5" fill="#16161f"/>
+              <!-- Text lines (OCR extraction) -->
+              <g class="svg-el d2 anim-fade">
+                <text x="20" y="32" fill="#6366f1" font-size="6" font-family="monospace">JOHANSEN</text>
+                <text x="20" y="39" fill="#818cf8" font-size="5" font-family="monospace">ANNA MARIE</text>
+                <text x="20" y="46" fill="#818cf8" font-size="5" font-family="monospace">NLD</text>
+              </g>
+              <!-- MRZ lines -->
+              <g class="svg-el d4">
+                <text x="18" y="62" fill="#22c55e" font-size="5" font-family="monospace" class="anim-fade">P&lt;NLDOHANSEN&lt;&lt;ANNA&lt;MARIE</text>
+                <text x="18" y="70" fill="#22c55e" font-size="5" font-family="monospace" class="anim-fade" style="animation-delay:.3s">1234567890NL8001014F3001017&lt;&lt;&lt;&lt;&lt;04</text>
+              </g>
+              <!-- Extract arrow -->
+              <g class="svg-el d3">
+                <line x1="70" y1="36" x2="80" y2="36" stroke="#6366f1" stroke-width="1.5"/>
+                <polygon points="80,33 86,36 80,39" fill="#6366f1"/>
+              </g>
+              <!-- Extracted data box -->
+              <rect class="svg-el d5 anim-slide" x="72" y="22" width="24" height="40" rx="3" stroke="#6366f1" stroke-width="1" fill="#111119"/>
+              <g class="svg-el d6 anim-fade" style="animation-delay:.4s">
+                <text x="76" y="34" fill="#e4e4ed" font-size="4.5" font-family="monospace">NL</text>
+                <text x="76" y="41" fill="#8888a0" font-size="4" font-family="monospace">PASSPORT</text>
+                <text x="76" y="48" fill="#8888a0" font-size="4" font-family="monospace">✓ MRZ OK</text>
+                <text x="76" y="55" fill="#22c55e" font-size="4" font-family="monospace">✓ CHK OK</text>
+              </g>
+            </svg>
+          </div>
+          <span class="pipeline-badge">🌐 Both</span>
+          <h4>OCR & MRZ Extraction</h4>
+          <p>AI reads all text, decodes the machine-readable zone, and cross-validates checksums.</p>
+        </div>
+      </div>
+
+      <!-- Step 3: Security Validation -->
+      <div class="pipeline-step" data-step="3">
+        <div class="pipeline-circle">3</div>
+        <div class="pipeline-text">
+          <div class="pipeline-svg-wrap">
+            <svg class="pipeline-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Document -->
+              <rect class="svg-el d1" x="24" y="18" width="52" height="36" rx="3" stroke="#818cf8" stroke-width="1.5" fill="#16161f"/>
+              <!-- UV beam -->
+              <rect class="svg-el d2 anim-uv" x="30" y="20" width="10" height="32" rx="2" fill="#7c3aed" opacity=".3"/>
+              <text class="svg-el d3" x="32" y="38" fill="#a78bfa" font-size="5" font-weight="bold">UV</text>
+              <!-- IR beam -->
+              <rect class="svg-el d3 anim-uv" style="animation-delay:.3s" x="44" y="20" width="10" height="32" rx="2" fill="#ef4444" opacity=".3"/>
+              <text class="svg-el d4" x="46" y="38" fill="#f87171" font-size="5" font-weight="bold">IR</text>
+              <!-- White light -->
+              <rect class="svg-el d4 anim-uv" style="animation-delay:.6s" x="58" y="20" width="10" height="32" rx="2" fill="#e4e4ed" opacity=".2"/>
+              <text class="svg-el d5" x="58" y="38" fill="#e4e4ed" font-size="5" font-weight="bold">WHT</text>
+              <!-- Hologram overlay -->
+              <ellipse class="svg-el d5" cx="50" cy="36" rx="14" ry="10" stroke="#6366f1" stroke-width="1" stroke-dasharray="3 2" opacity=".5"/>
+              <!-- Liveness label -->
+              <rect class="svg-el d6 anim-slide" x="20" y="62" width="60" height="24" rx="4" fill="#111119" stroke="#22c55e" stroke-width="1"/>
+              <text class="svg-el d7 anim-fade" x="30" y="72" fill="#22c55e" font-size="5.5" font-weight="bold">DOCUMENT LIVENESS</text>
+              <text class="svg-el d7 anim-fade" style="animation-delay:.5s" x="30" y="79" fill="#8888a0" font-size="4.5">Screen · Print · AI Generated</text>
+            </svg>
+          </div>
+          <span class="pipeline-badge">🛫 Airport</span>
+          <h4>Security Validation</h4>
+          <p>UV/IR multispectral analysis and document liveness detect forgeries and screen captures.</p>
+        </div>
+      </div>
+
+      <!-- Step 4: Face Match -->
+      <div class="pipeline-step" data-step="4">
+        <div class="pipeline-circle">4</div>
+        <div class="pipeline-text">
+          <div class="pipeline-svg-wrap">
+            <svg class="pipeline-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Document photo (left) -->
+              <circle class="svg-el d1" cx="28" cy="32" r="14" stroke="#818cf8" stroke-width="1.5" fill="#16161f"/>
+              <circle class="svg-el d2" cx="28" cy="28" r="5" fill="#1e1e2a" stroke="#818cf8" stroke-width="1"/>
+              <path class="svg-el d3" d="M20 42 Q28 48 36 42" stroke="#818cf8" stroke-width="1" fill="none"/>
+              <text class="svg-el d3" x="18" y="56" fill="#818cf8" font-size="5" font-weight="bold">DOC</text>
+              <!-- Live selfie (right) -->
+              <circle class="svg-el d1" cx="72" cy="32" r="14" stroke="#6366f1" stroke-width="1.5" fill="#16161f"/>
+              <circle class="svg-el d2" cx="72" cy="28" r="5" fill="#1e1e2a" stroke="#6366f1" stroke-width="1"/>
+              <path class="svg-el d3" d="M64 42 Q72 48 80 42" stroke="#6366f1" stroke-width="1" fill="none"/>
+              <text class="svg-el d3" x="62" y="56" fill="#6366f1" font-size="5" font-weight="bold">SELFIE</text>
+              <!-- Match lines -->
+              <line class="svg-el d4 anim-connect" x1="36" y1="28" x2="64" y2="28" stroke="#22c55e" stroke-width="1.5"/>
+              <line class="svg-el d5 anim-connect" style="animation-delay:.15s" x1="36" y1="32" x2="64" y2="32" stroke="#22c55e" stroke-width="1.5"/>
+              <line class="svg-el d5 anim-connect" style="animation-delay:.3s" x1="36" y1="36" x2="64" y2="36" stroke="#22c55e" stroke-width="1.5"/>
+              <line class="svg-el d6 anim-connect" style="animation-delay:.45s" x1="36" y1="40" x2="64" y2="40" stroke="#22c55e" stroke-width="1.5"/>
+              <!-- Match score -->
+              <rect class="svg-el d6 anim-slide" x="28" y="64" width="44" height="22" rx="4" fill="#111119" stroke="#22c55e" stroke-width="1"/>
+              <text class="svg-el d7 anim-fade" x="36" y="75" fill="#22c55e" font-size="6" font-weight="bold">98.7% MATCH</text>
+              <text class="svg-el d7 anim-fade" style="animation-delay:.3s" x="36" y="82" fill="#8888a0" font-size="4.5">Hue · LBP · SSIM</text>
+            </svg>
+          </div>
+          <span class="pipeline-badge">🌐 Both</span>
+          <h4>Face Match</h4>
+          <p>Biometric comparison between document photo and live selfie — hue, texture, and structure.</p>
+        </div>
+      </div>
+
+      <!-- Step 5: KYC & AML Screening -->
+      <div class="pipeline-step" data-step="5">
+        <div class="pipeline-circle">5</div>
+        <div class="pipeline-text">
+          <div class="pipeline-svg-wrap">
+            <svg class="pipeline-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Central database -->
+              <rect class="svg-el d1" x="32" y="22" width="36" height="44" rx="4" stroke="#818cf8" stroke-width="1.5" fill="#16161f"/>
+              <ellipse class="svg-el d2" cx="50" cy="30" rx="14" ry="5" stroke="#818cf8" stroke-width="1"/>
+              <ellipse class="svg-el d2" cx="50" cy="40" rx="14" ry="5" stroke="#818cf8" stroke-width="1" opacity=".6"/>
+              <ellipse class="svg-el d2" cx="50" cy="50" rx="14" ry="5" stroke="#818cf8" stroke-width="1" opacity=".4"/>
+              <!-- Satellite nodes -->
+              <circle class="svg-el d3 anim-node" cx="12" cy="30" r="3" fill="#6366f1"/>
+              <circle class="svg-el d3 anim-node" style="animation-delay:.2s" cx="12" cy="50" r="3" fill="#6366f1"/>
+              <circle class="svg-el d4 anim-node" style="animation-delay:.4s" cx="88" cy="30" r="3" fill="#6366f1"/>
+              <circle class="svg-el d4 anim-node" style="animation-delay:.6s" cx="88" cy="50" r="3" fill="#6366f1"/>
+              <circle class="svg-el d3 anim-node" style="animation-delay:.8s" cx="50" cy="8" r="3" fill="#6366f1"/>
+              <circle class="svg-el d4 anim-node" style="animation-delay:1s" cx="50" cy="82" r="3" fill="#6366f1"/>
+              <!-- Connection lines -->
+              <line class="svg-el d3" x1="15" y1="30" x2="32" y2="34" stroke="#6366f1" stroke-width=".8" opacity=".4"/>
+              <line class="svg-el d3" x1="15" y1="50" x2="32" y2="46" stroke="#6366f1" stroke-width=".8" opacity=".4"/>
+              <line class="svg-el d4" x1="85" y1="30" x2="68" y2="34" stroke="#6366f1" stroke-width=".8" opacity=".4"/>
+              <line class="svg-el d4" x1="85" y1="50" x2="68" y2="46" stroke="#6366f1" stroke-width=".8" opacity=".4"/>
+              <line class="svg-el d3" x1="50" y1="11" x2="50" y2="22" stroke="#6366f1" stroke-width=".8" opacity=".4"/>
+              <line class="svg-el d4" x1="50" y1="66" x2="50" y2="79" stroke="#6366f1" stroke-width=".8" opacity=".4"/>
+              <!-- Checkmarks on nodes -->
+              <text class="svg-el d5 anim-fade" x="9" y="33" fill="#22c55e" font-size="6">✓</text>
+              <text class="svg-el d5 anim-fade" style="animation-delay:.2s" x="9" y="53" fill="#22c55e" font-size="6">✓</text>
+              <text class="svg-el d6 anim-fade" style="animation-delay:.4s" x="84" y="33" fill="#22c55e" font-size="6">✓</text>
+              <text class="svg-el d6 anim-fade" style="animation-delay:.6s" x="84" y="53" fill="#22c55e" font-size="6">✓</text>
+              <!-- Labels -->
+              <text class="svg-el d7 anim-fade" x="30" y="90" fill="#8888a0" font-size="4.5">PEP · Sanctions · Watchlists</text>
+            </svg>
+          </div>
+          <span class="pipeline-badge">📱 Mobile</span>
+          <h4>KYC & AML Screening</h4>
+          <p>Name and identity checked against global PEP, sanctions, and adverse media databases.</p>
+        </div>
+      </div>
+
+      <!-- Step 6: Verified Result -->
+      <div class="pipeline-step" data-step="6">
+        <div class="pipeline-circle">6</div>
+        <div class="pipeline-text">
+          <div class="pipeline-svg-wrap">
+            <svg class="pipeline-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Shield -->
+              <path class="svg-el d1 anim-shield" d="M50 12 L72 24 L72 52 Q72 70 50 82 Q28 70 28 52 L28 24 Z" stroke="#22c55e" stroke-width="2" fill="#111119"/>
+              <!-- Checkmark -->
+              <path class="svg-el d3 anim-check" d="M38 48 L47 58 L64 38" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <!-- Radiating circles -->
+              <circle class="svg-el d4" cx="50" cy="48" r="38" stroke="#22c55e" stroke-width=".8" opacity=".2"/>
+              <circle class="svg-el d5" cx="50" cy="48" r="44" stroke="#22c55e" stroke-width=".5" opacity=".1"/>
+              <!-- Status text -->
+              <rect class="svg-el d6 anim-slide" x="22" y="88" width="56" height="18" rx="4" fill="#111119" stroke="#22c55e" stroke-width="1"/>
+              <text class="svg-el d7 anim-fade" x="32" y="100" fill="#22c55e" font-size="6" font-weight="bold">✓ VERIFIED</text>
+            </svg>
+          </div>
+          <span class="pipeline-badge">🌐 Both</span>
+          <h4>Verified Result</h4>
+          <p>Structured JSON response with status, confidence score, extracted data, and full audit trail.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- COMPLIANCE -->
+<section style="background:var(--bg-alt)">
+  <div class="section-inner">
+    <div class="section-label">Compliance</div>
+    <h2 class="section-title">Built for <em>regulated</em> industries</h2>
+    <p class="section-desc centered">Meet KYC, AML, and data protection requirements out of the box.</p>
+    <div class="compliance-grid">
+      <div class="compliance-badge">
+        <div class="icon">🇪🇺</div>
+        <h4>GDPR</h4>
+        <p>Data protection by design</p>
+      </div>
+      <div class="compliance-badge">
+        <div class="icon">📋</div>
+        <h4>KYC / AML</h4>
+        <p>Full compliance toolkit</p>
+      </div>
+      <div class="compliance-badge">
+        <div class="icon">🏦</div>
+        <h4>eIDAS 2.0</h4>
+        <p>EU digital identity framework</p>
+      </div>
+      <div class="compliance-badge">
+        <div class="icon">✈️</div>
+        <h4>ICAO 9303</h4>
+        <p>Travel document standards</p>
+      </div>
+      <div class="compliance-badge">
+        <div class="icon">🔒</div>
+        <h4>SOC 2</h4>
+        <p>Security &amp; availability</p>
+      </div>
+      <div class="compliance-badge">
+        <div class="icon">🛡️</div>
+        <h4>ISO 30107-3</h4>
+        <p>Biometric presentation attack detection</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="section-inner">
+    <div class="section-label">Pricing</div>
+    <h2 class="section-title">Simple, <em>transparent</em> pricing</h2>
+    <p class="section-desc">Start free. Scale as you grow. No hidden fees.</p>
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <h3>Sandbox</h3>
+        <div class="price">Free</div>
+        <p class="desc">For testing and development</p>
+        <ul>
+          <li>100 verifications/month</li>
+          <li>All document types</li>
+          <li>Full API access</li>
+          <li>Community support</li>
+        </ul>
+        <a href="https://portal.valydar.com" class="btn btn-secondary">Get Sandbox Key</a>
+      </div>
+      <div class="pricing-card featured">
+        <h3>Starter</h3>
+        <div class="price">€0.50 <span>/ verification</span></div>
+        <p class="desc">For growing products</p>
+        <ul>
+          <li>Unlimited verifications</li>
+          <li>Document + face verification</li>
+          <li>KYC screening</li>
+          <li>Email support</li>
+        </ul>
+        <a href="mailto:hello@valydar.com" class="btn btn-primary">Get Started</a>
+      </div>
+      <div class="pricing-card">
+        <h3>Enterprise</h3>
+        <div class="price">Custom</div>
+        <p class="desc">For high-volume operations</p>
+        <ul>
+          <li>Volume discounts</li>
+          <li>AML + PEP screening</li>
+          <li>Dedicated support</li>
+          <li>SLA &amp; custom integrations</li>
+        </ul>
+        <a href="mailto:sales@valydar.com" class="btn btn-secondary">Contact Sales</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="section-inner">
+    <h2>Ready to start <em>verifying</em>?</h2>
+    <p>Get your sandbox API key in seconds. No credit card required.</p>
+    <div class="hero-buttons">
+      <a href="https://portal.valydar.com" class="btn btn-primary">Get API Key →</a>
+      <a href="mailto:hello@valydar.com" class="btn btn-secondary">Talk to Sales</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <a href="/" class="nav-logo"><span>◆</span> valydar</a>
+      <p>Identity verification platform for developers. Single API for documents, biometrics, KYC, and fraud detection.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Product</h4>
+      <a href="#features">Features</a>
+      <a href="#sdk">Web SDK</a>
+      <a href="#pricing">Pricing</a>
+      <a href="https://docs.valydar.com">Documentation</a>
+      <a href="https://portal.valydar.com">Sandbox</a>
+    </div>
+    <div class="footer-col">
+      <h4>Company</h4>
+      <a href="#">About</a>
+      <a href="#">Blog</a>
+      <a href="mailto:hello@valydar.com">Contact</a>
+      <a href="#">Careers</a>
+    </div>
+    <div class="footer-col">
+      <h4>Legal</h4>
+      <a href="#">Privacy Policy</a>
+      <a href="#">Terms of Service</a>
+      <a href="#">DPA</a>
+      <a href="#">Security</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>&copy; 2026 Valydar Software B.V. All rights reserved.</p>
+    <p>Amsterdam, The Netherlands</p>
+  </div>
+</footer>
+
+<script>
+// ── Code language switcher ──
+const filenames = {
+  'Rust': 'verify.rs',
+  'Python': 'verify.py',
+  'JavaScript': 'verify.js',
+  'Go': 'verify.go',
+  'Java': 'Verify.java',
+  'C#': 'Verify.cs',
+};
+document.querySelectorAll('.doc-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.doc-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    document.querySelectorAll('.code-block pre').forEach(pre => pre.style.display = 'none');
+    const lang = pill.textContent.trim();
+    const el = document.getElementById('code-' + lang.toLowerCase().replace('#', 'sharp'));
+    if (el) el.style.display = '';
+    document.getElementById('code-filename').textContent = filenames[lang] || 'verify.txt';
+  });
+});
+
+// ── Pipeline animation ──
+(function() {
+  const steps = document.querySelectorAll('.pipeline-step');
+  const progress = document.getElementById('pipeline-progress');
+  const playBtn = document.getElementById('pipeline-play');
+  const resetBtn = document.getElementById('pipeline-reset');
+  const totalSteps = steps.length;
+  let currentStep = 0;
+  let timers = [];
+  let playing = false;
+
+  function activateStep(i) {
+    if (i >= totalSteps) { playing = false; playBtn.textContent = '▶ Replay'; playBtn.classList.remove('active'); resetBtn.style.display = ''; return; }
+    steps.forEach(s => s.classList.remove('active'));
+    steps[i].classList.add('active');
+    const pct = ((i + 1) / totalSteps) * 100;
+    progress.style.width = pct + '%';
+    currentStep = i + 1;
+  }
+
+  function play() {
+    if (currentStep >= totalSteps) reset();
+    playing = true;
+    playBtn.textContent = '⏸ Pause';
+    playBtn.classList.add('active');
+    resetBtn.style.display = '';
+    function next() {
+      if (!playing || currentStep >= totalSteps) { if (currentStep >= totalSteps) { playing = false; playBtn.textContent = '▶ Replay'; playBtn.classList.remove('active'); } return; }
+      activateStep(currentStep);
+      timers.push(setTimeout(next, 1800));
+    }
+    next();
+  }
+
+  function pause() {
+    playing = false;
+    playBtn.textContent = '▶ Play';
+    playBtn.classList.remove('active');
+    timers.forEach(clearTimeout);
+    timers = [];
+  }
+
+  function reset() {
+    pause();
+    steps.forEach(s => s.classList.remove('active'));
+    progress.style.width = '0';
+    currentStep = 0;
+    resetBtn.style.display = 'none';
+    playBtn.textContent = '▶ Play';
+  }
+
+  playBtn.addEventListener('click', () => { playing ? pause() : play(); });
+  resetBtn.addEventListener('click', reset);
+})();
+</script>
 </body>
 </html>
