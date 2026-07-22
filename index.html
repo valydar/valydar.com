@@ -226,7 +226,7 @@
     <a href="#how-it-works">How It Works</a>
     <a href="#pricing">Pricing</a>
     <a href="https://docs.valydar.com">Docs</a>
-    <a href="https://portal.valydar.com" class="nav-cta">Get API Key</a>
+    <a href="#contact" class="nav-cta">Get API Key</a>
   </div>
 </nav>
 
@@ -236,7 +236,7 @@
   <h1>Fast &amp; Secure<br><em>Identity Verification</em></h1>
   <p>Single API for document verification, biometrics, KYC, AML, and fraud detection. Built for developers. Priced by usage.</p>
   <div class="hero-buttons">
-    <a href="#pricing" class="btn btn-primary">Get API Key</a>
+    <a href="#contact" class="btn btn-primary">Get API Key</a>
     <a href="https://docs.valydar.com" class="btn btn-secondary">Read the Docs →</a>
   </div>
 </section>
@@ -941,7 +941,7 @@ result, err := client.<span class="fn">Verify</span>(
           <li>Full API access</li>
           <li>Community support</li>
         </ul>
-        <a href="https://portal.valydar.com" class="btn btn-secondary">Get Sandbox Key</a>
+        <a href="#contact" class="btn btn-secondary">Get Sandbox Key</a>
       </div>
       <div class="pricing-card featured">
         <h3>Starter</h3>
@@ -953,7 +953,7 @@ result, err := client.<span class="fn">Verify</span>(
           <li>KYC screening</li>
           <li>Email support</li>
         </ul>
-        <a href="mailto:hello@valydar.com" class="btn btn-primary">Get Started</a>
+        <a href="#contact" class="btn btn-primary">Get Started</a>
       </div>
       <div class="pricing-card">
         <h3>Enterprise</h3>
@@ -965,21 +965,53 @@ result, err := client.<span class="fn">Verify</span>(
           <li>Dedicated support</li>
           <li>SLA &amp; custom integrations</li>
         </ul>
-        <a href="mailto:sales@valydar.com" class="btn btn-secondary">Contact Sales</a>
+        <a href="#contact" class="btn btn-secondary">Contact Sales</a>
       </div>
     </div>
   </div>
 </section>
 
-<!-- CTA -->
-<section class="cta-section">
-  <div class="section-inner">
+<!-- CONTACT -->
+<section class="cta-section" id="contact">
+  <div class="section-inner" style="max-width:600px">
     <h2>Ready to start <em>verifying</em>?</h2>
-    <p>Get your sandbox API key in seconds. No credit card required.</p>
-    <div class="hero-buttons">
-      <a href="https://portal.valydar.com" class="btn btn-primary">Get API Key →</a>
-      <a href="mailto:hello@valydar.com" class="btn btn-secondary">Talk to Sales</a>
-    </div>
+    <p>Request a sandbox API key. We'll get back to you within 24 hours.</p>
+    <form name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field" style="text-align:left;margin-top:32px">
+      <input type="hidden" name="form-name" value="contact">
+      <p style="display:none"><label>Don't fill this out: <input name="bot-field"></label></p>
+      <div style="display:grid;gap:16px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Name</label>
+            <input type="text" name="name" required style="width:100%;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:var(--font)">
+          </div>
+          <div>
+            <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Email</label>
+            <input type="email" name="email" required style="width:100%;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:var(--font)">
+          </div>
+        </div>
+        <div>
+          <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Company</label>
+          <input type="text" name="company" style="width:100%;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:var(--font)">
+        </div>
+        <div>
+          <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Use case</label>
+          <select name="use-case" required style="width:100%;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:var(--font)">
+            <option value="">Select...</option>
+            <option value="kyc">KYC / Onboarding</option>
+            <option value="aml">AML Screening</option>
+            <option value="age-verification">Age Verification</option>
+            <option value="fraud">Fraud Detection</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Message</label>
+          <textarea name="message" rows="3" style="width:100%;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:var(--font);resize:vertical"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px">Request API Key</button>
+      </div>
+    </form>
   </div>
 </section>
 
