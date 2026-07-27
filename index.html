@@ -227,7 +227,8 @@
     <a href="#pricing">Pricing</a>
     <a href="https://docs.valydar.com">Docs</a>
     <a href="/api-reference.html">API Reference</a>
-    <a href="#contact" class="nav-cta">Get API Key</a>
+    <a href="/signin.html" class="nav-cta">Sign In</a>
+    <a href="/signup.html" class="btn btn-primary" style="padding:8px 20px;font-size:14px;font-weight:600;border-radius:8px">Get Started</a>
   </div>
 </nav>
 
@@ -237,8 +238,8 @@
   <h1>Fast &amp; Secure<br><em>Identity Verification</em></h1>
   <p>Single API for document verification, biometrics, KYC, AML, and fraud detection. Built for developers. Priced by usage.</p>
   <div class="hero-buttons">
-    <a href="#contact" class="btn btn-primary">Get API Key</a>
-    <a href="https://docs.valydar.com" class="btn btn-secondary">Read the Docs →</a>
+    <a href="/signup.html" class="btn btn-primary">Get Started →</a>
+    <a href="https://docs.valydar.com" class="btn btn-secondary">Read the Docs</a>
   </div>
 </section>
 
@@ -942,7 +943,7 @@ result, err := client.<span class="fn">Verify</span>(
           <li>Full API access</li>
           <li>Community support</li>
         </ul>
-        <a href="#contact" class="btn btn-secondary">Get Sandbox Key</a>
+        <a href="/signup.html" class="btn btn-secondary">Get Sandbox Key</a>
       </div>
       <div class="pricing-card featured">
         <h3>Starter</h3>
@@ -954,7 +955,7 @@ result, err := client.<span class="fn">Verify</span>(
           <li>KYC screening</li>
           <li>Email support</li>
         </ul>
-        <a href="#contact" class="btn btn-primary">Get Started</a>
+        <a href="/signup.html" class="btn btn-primary">Get Started</a>
       </div>
       <div class="pricing-card">
         <h3>Enterprise</h3>
@@ -976,8 +977,15 @@ result, err := client.<span class="fn">Verify</span>(
 <section class="cta-section" id="contact">
   <div class="section-inner" style="max-width:600px">
     <h2>Ready to start <em>verifying</em>?</h2>
-    <p>Request a sandbox API key. We'll get back to you within 24 hours.</p>
-    <form name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field" style="text-align:left;margin-top:32px">
+    <p>Sign up free and get started in minutes — no sales call required. For enterprise plans, reach out below.</p>
+    <div style="margin-bottom:32px">
+      <a href="/signup.html" class="btn btn-primary" style="font-size:16px;padding:16px 40px">Create Free Account →</a>
+    </div>
+    <div class="divider" style="color:var(--muted);font-size:13px;margin-bottom:24px;position:relative">
+      <span style="background:var(--bg);padding:0 12px;position:relative;z-index:1">Or contact us for enterprise</span>
+      <hr style="border:none;border-top:1px solid var(--border);position:absolute;top:50%;left:0;right:0;z-index:0">
+    </div>
+    <form name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field" style="text-align:left">
       <input type="hidden" name="form-name" value="contact">
       <p style="display:none"><label>Don't fill this out: <input name="bot-field"></label></p>
       <div style="display:grid;gap:16px">
@@ -1030,7 +1038,7 @@ result, err := client.<span class="fn">Verify</span>(
       <a href="#pricing">Pricing</a>
       <a href="https://docs.valydar.com">Documentation</a>
       <a href="/api-reference.html">API Reference</a>
-      <a href="https://portal.valydar.com">Sandbox</a>
+      <a href="/signup.html">Sandbox</a>
     </div>
     <div class="footer-col">
       <h4>Company</h4>
