@@ -1,3 +1,4 @@
-// Non-production environment config
-window.VALYDAR_API_BASE = 'https://api.dev.valydar.com';
-window.VALYDAR_SANDBOX_KEY = '';
+// Auto-detect API environment based on hostname
+window.VALYDAR_API_BASE = window.location.hostname.includes('dev')
+  ? 'https://api.dev.valydar.com'
+  : 'https://api.valydar.com';
