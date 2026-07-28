@@ -231,6 +231,19 @@ async function renderDashboard() {
     const needsPayment = paymentStatus === 'none';
     const paymentPending = paymentStatus === 'pending';
     const paymentActive = paymentStatus === 'active';
+    const emailVerified = profile.email_verified === true || profile.email_verified === undefined;
+
+    // ── Email verification alert ──
+    if (!emailVerified) {
+      content.innerHTML += `
+        <div class="alert alert-warning">
+          <div class="alert-icon">✉️</div>
+          <div class="alert-content">
+            <strong>Verify your email</strong>
+            <p>Please check your inbox and click the verification link. Some features may be limited until your email is confirmed.</p>
+          </div>
+        </div>`;
+    }
 
     // ── Payment alert ──
     if (needsPayment) {
@@ -287,6 +300,9 @@ async function renderDashboard() {
         <div class="info-row">
           <span class="info-label">Created</span>
           <span class="info-value">${formatDate(profile.created_at)}</span>
+        </div>
+        <div class="info-row" style="border-bottom:none;padding-top:16px">
+          <a href="/forgot-password.html" style="font-size:13px;color:var(--accent-light)">Change password →</a>
         </div>
       </div>`;
 
