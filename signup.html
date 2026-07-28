@@ -6,6 +6,7 @@
 <title>Sign Up — Valydar</title>
 <meta name="description" content="Create your Valydar account and start verifying identities.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🛡️</text></svg>">
+<script src="/env.js"></script>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   :root{
@@ -94,7 +95,7 @@
 </div>
 
 <script>
-const API = window.VALYDAR_API_BASE || 'https://api.dev.valydar.com';
+const API = window.VALYDAR_API_BASE || 'https://api.valydar.com';
 
 function checkPassword() {
   const pw = document.getElementById('password').value;
