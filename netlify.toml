@@ -1,0 +1,22 @@
+[build]
+  publish = "."
+  command = "echo 'static site'"
+
+[[redirects]]
+  from = "https://valydar.com/*"
+  to = "https://portal.valydar.com/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "https://www.valydar.com/*"
+  to = "https://portal.valydar.com/:splat"
+  status = 301
+  force = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
