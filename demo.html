@@ -63,11 +63,16 @@
   .cam-skip:hover{color:var(--white)}
   .cam-stage{position:relative;display:none;background:#000}
   .cam-stage video{width:100%;display:block;max-height:440px;object-fit:cover}
+  .cam-stage.mirror video{transform:scaleX(-1)}
   .cam-overlay{position:absolute;inset:0;pointer-events:none}
   .cam-frame{position:absolute;border:2px solid rgba(99,102,241,.85);border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.38)}
   .cam-frame.doc{width:76%;left:12%;top:16%;aspect-ratio:1.4}
-  .cam-frame.selfie{width:48%;left:26%;top:12%;aspect-ratio:.78;border-radius:50%}
+  .cam-frame.selfie{width:62%;left:19%;top:15%;aspect-ratio:.78;border-radius:50%}
   .cam-hint{position:absolute;bottom:100px;left:50%;transform:translateX(-50%);width:max-content;max-width:90%;text-align:center;color:#fff;font-size:13px;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,.7);background:rgba(0,0,0,.45);padding:6px 14px;border-radius:999px}
+  .cam-hint.docs{bottom:140px}
+  .cam-checks{position:absolute;bottom:94px;left:0;right:0;display:flex;gap:8px;justify-content:center}
+  .cam-check{font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:3px 10px;background:rgba(0,0,0,.55);transition:color .2s,border-color .2s}
+  .cam-check.ok{color:var(--success);border-color:rgba(34,197,94,.55)}
   .cam-btn{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);width:60px;height:60px;border-radius:50%;border:4px solid #fff;background:rgba(255,255,255,.28);cursor:pointer;pointer-events:auto;padding:0}
   .cam-btn::after{content:'';position:absolute;inset:5px;border-radius:50%;background:#fff;transition:background .2s}
   .cam-btn.ready::after{background:var(--success)}
@@ -197,7 +202,12 @@
         <video id="docVideo" autoplay playsinline muted></video>
         <div class="cam-overlay">
           <div class="cam-frame doc"></div>
-          <div class="cam-hint" id="docHint">Align your document within the frame</div>
+          <div class="cam-hint docs" id="docHint">Align your document within the frame</div>
+          <div class="cam-checks">
+            <span class="cam-check" id="docCheckDoc">Document</span>
+            <span class="cam-check" id="docCheckMrz">MRZ</span>
+            <span class="cam-check" id="docCheckSharp">Sharp</span>
+          </div>
           <button class="cam-btn" id="docCamBtn" aria-label="Capture document"></button>
         </div>
       </div>
@@ -232,7 +242,7 @@
         <a href="#" class="cam-skip" id="selfieSkip">Skip — no face match</a>
         <p class="cam-note" id="selfieCamError"></p>
       </div>
-      <div class="cam-stage" id="selfieStage">
+      <div class="cam-stage mirror" id="selfieStage">
         <video id="selfieVideo" autoplay playsinline muted></video>
         <div class="cam-overlay">
           <div class="cam-frame selfie"></div>
@@ -330,6 +340,7 @@
 
   var SAMPLE_W = 320, SAMPLE_H = 240;
   var AUTO_MIN_SHARP = 22, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
+  var GOOD_COUNT_TARGET = 5;
   var SAMPLE = document.createElement('canvas');
   SAMPLE.width = SAMPLE_W;
   SAMPLE.height = SAMPLE_H;
@@ -376,7 +387,7 @@
   function stopCam() {
     if (cam.timer) { clearInterval(cam.timer); cam.timer = null; }
     if (cam.stream) { cam.stream.getTracks().forEach(function (t) { t.stop(); }); cam.stream = null; }
-    cam.lastFrame = null; cam.sharpCount = 0; cam.capturing = false;
+    cam.lastFrame = null; cam.sharpCount = 0; cam.capturing = false; cam.goodCount = 0;
   }
 
   function camErrorMsg(err) {
@@ -411,8 +422,52 @@
     var bright = brightness(gray);
     var diff = cam.lastFrame ? frameDiff(cam.lastFrame, gray) : 999;
     cam.lastFrame = gray;
-
     var steady = diff < 3;
+
+    if (kind === 'document') monitorDoc(video, gray, sharp, bright, steady, hintEl, onCapture);
+    else monitorSelfie(video, gray, sharp, bright, steady, hintEl, onCapture);
+  }
+
+  function setCheck(id, ok) {
+    $(id).classList.toggle('ok', !!ok);
+  }
+
+  function resetChecks() {
+    setCheck('docCheckDoc', false);
+    setCheck('docCheckMrz', false);
+    setCheck('docCheckSharp', false);
+  }
+
+  function monitorDoc(video, gray, sharp, bright, steady, hintEl, onCapture) {
+    if (bright <= MIN_BRIGHT) { resetChecks(); hintEl.textContent = 'Too dark — add some light'; return; }
+    if (bright >= MAX_BRIGHT) { resetChecks(); hintEl.textContent = 'Too bright — reduce glare'; return; }
+
+    var reg = docRegion(gray, SAMPLE_W, SAMPLE_H);
+    var mrz = reg.detected && detectMRZ(gray, SAMPLE_W, SAMPLE_H, reg);
+    var sharpOk = sharp > AUTO_MIN_SHARP;
+    var ready = reg.detected && mrz && sharpOk && steady;
+
+    setCheck('docCheckDoc', reg.detected);
+    setCheck('docCheckMrz', mrz);
+    setCheck('docCheckSharp', sharpOk);
+
+    if (!reg.detected) hintEl.textContent = 'Align your document within the frame';
+    else if (!mrz) hintEl.textContent = sharpOk ? 'Document found — show the MRZ at the bottom' : 'Document found — steady your hand';
+    else if (!sharpOk) hintEl.textContent = 'MRZ detected — steady your hand';
+    else if (!steady) hintEl.textContent = 'Hold steady…';
+    else {
+      cam.goodCount = (cam.goodCount || 0) + 1;
+      if (cam.goodCount >= GOOD_COUNT_TARGET) {
+        hintEl.textContent = 'Valid — capturing…';
+        doCapture('document', video, onCapture);
+        return;
+      }
+      hintEl.textContent = 'Valid — capturing in ' + (GOOD_COUNT_TARGET - cam.goodCount) + '…';
+    }
+    $('docCamBtn').classList.toggle('ready', ready);
+  }
+
+  function monitorSelfie(video, gray, sharp, bright, steady, hintEl, onCapture) {
     var ok = sharp > AUTO_MIN_SHARP && bright > MIN_BRIGHT && bright < MAX_BRIGHT && steady;
     cam.sharpCount = ok ? cam.sharpCount + 1 : 0;
 
@@ -423,12 +478,63 @@
     else if (cam.sharpCount < 3) hintEl.textContent = 'Sharp ✓ Hold steady…';
     else {
       hintEl.textContent = 'Capturing…';
-      doCapture(kind, video, onCapture);
+      doCapture('selfie', video, onCapture);
       return;
     }
-    var btn = $(kind === 'selfie' ? 'selfieCamBtn' : 'docCamBtn');
-    if (ok && cam.sharpCount >= 2) btn.classList.add('ready');
-    else btn.classList.remove('ready');
+    $('selfieCamBtn').classList.toggle('ready', ok && cam.sharpCount >= 2);
+  }
+
+  function docRegion(gray, w, h) {
+    var min = 255, max = 0;
+    for (var i = 0; i < gray.length; i++) {
+      if (gray[i] < min) min = gray[i];
+      if (gray[i] > max) max = gray[i];
+    }
+    var range = max - min;
+    if (range < 20) return { detected: false };
+    var thr = min + range * 0.55;
+    var count = 0, minX = w, maxX = -1, minY = h, maxY = -1;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (gray[y * w + x] >= thr) {
+          count++;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (!count) return { detected: false };
+    var bw = maxX - minX + 1, bh = maxY - minY + 1;
+    return {
+      detected: count / (w * h) > 0.15 &&
+        bw / bh > 1.1 && bw / bh < 2.4 &&
+        bw / w > 0.55 && bh / h > 0.5 &&
+        bw > 180 && bh > 110,
+      left: minX, right: maxX, top: minY, bottom: maxY, w: bw, h: bh
+    };
+  }
+
+  function detectMRZ(gray, w, h, reg) {
+    var y0 = Math.max(reg.top + 1, reg.bottom - Math.round(reg.h * 0.34));
+    var y1 = reg.bottom - 1;
+    if (y1 - y0 < 12) return false;
+    var x0 = reg.left + 2, x1 = reg.right - 2;
+    if (x1 - x0 < 40) return false;
+    var run = 0, best = 0;
+    for (var y = y0; y <= y1; y++) {
+      var sum = 0, sumSq = 0;
+      for (var x = x0; x <= x1; x++) {
+        var g = gray[y * w + x];
+        sum += g; sumSq += g * g;
+      }
+      var n = x1 - x0 + 1;
+      var varr = sumSq / n - (sum / n) * (sum / n);
+      if (varr > 220) { run++; if (run > best) best = run; }
+      else run = 0;
+    }
+    return best >= 12;
   }
 
   function assessImage(blob) {
