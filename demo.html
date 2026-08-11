@@ -203,9 +203,9 @@
         <video id="docVideo" autoplay playsinline muted></video>
         <div class="cam-overlay">
           <div class="cam-frame doc" id="docFrame"></div>
-          <div class="cam-hint docs" id="docHint">Align your document within the frame</div>
+          <div class="cam-hint docs" id="docHint">Align your passport within the frame</div>
           <div class="cam-checks">
-            <span class="cam-check" id="docCheckDoc">Document</span>
+            <span class="cam-check" id="docCheckDoc">Passport</span>
             <span class="cam-check" id="docCheckMrz">MRZ</span>
             <span class="cam-check" id="docCheckSharp">Sharp</span>
           </div>
@@ -339,7 +339,7 @@
   // ── Live camera capture ──
   var cam = { stream: null, timer: null, capturing: false, lastFrame: null, countdownStart: null };
 
-  var SAMPLE_W = 320, SAMPLE_H = 240;
+  var SAMPLE_W = 480, SAMPLE_H = 360;
   var AUTO_MIN_SHARP = 22, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
   var FACE_MIN_FRAC = 0.18;
   var COUNTDOWN_SEC = 3;
@@ -458,20 +458,20 @@
     if (bright <= MIN_BRIGHT) { resetChecks(); cam.countdownStart = null; hintEl.textContent = 'Too dark — add some light'; return; }
     if (bright >= MAX_BRIGHT) { resetChecks(); cam.countdownStart = null; hintEl.textContent = 'Too bright — reduce glare'; return; }
 
-    var reg = docRegion(gray, SAMPLE_W, SAMPLE_H);
-    var mrz = reg.detected && detectMRZ(gray, SAMPLE_W, SAMPLE_H, reg);
+    var page = pageLikely(gray, SAMPLE_W, SAMPLE_H);
+    var mrz = detectMRZ(gray, SAMPLE_W, SAMPLE_H);
     var sharpOk = sharp > AUTO_MIN_SHARP;
-    var ready = reg.detected && mrz && sharpOk && steady;
+    var ready = mrz && sharpOk && steady;
     if (!ready) cam.countdownStart = null;
 
-    setCheck('docCheckDoc', reg.detected);
+    setCheck('docCheckDoc', page);
     setCheck('docCheckMrz', mrz);
     setCheck('docCheckSharp', sharpOk);
     $('docFrame').classList.toggle('ready', ready);
     $('docCamBtn').classList.toggle('ready', ready);
 
-    if (!reg.detected) hintEl.textContent = 'Align your document within the frame';
-    else if (!mrz) hintEl.textContent = sharpOk ? 'Document found — show the MRZ at the bottom' : 'Document found — steady your hand';
+    if (!page) hintEl.textContent = 'Align your passport within the frame';
+    else if (!mrz) hintEl.textContent = sharpOk ? 'Passport found — show the MRZ at the bottom' : 'Passport found — steady your hand';
     else if (!sharpOk) hintEl.textContent = 'MRZ detected — steady your hand';
     else if (!steady) hintEl.textContent = 'Hold steady…';
     else updateCountdown('document', video, hintEl, onCapture);
@@ -512,57 +512,79 @@
     return total ? skin / total : 0;
   }
 
-  function docRegion(gray, w, h) {
-    var min = 255, max = 0;
-    for (var i = 0; i < gray.length; i++) {
-      if (gray[i] < min) min = gray[i];
-      if (gray[i] > max) max = gray[i];
+  function pageLikely(gray, w, h) {
+    var white = 0, dark = 0, n = w * h;
+    for (var i = 0; i < n; i++) {
+      var g = gray[i];
+      if (g > 150) white++;
+      else if (g < 100) dark++;
     }
-    var range = max - min;
-    if (range < 20) return { detected: false };
-    var thr = min + range * 0.55;
-    var count = 0, minX = w, maxX = -1, minY = h, maxY = -1;
+    var wf = white / n, df = dark / n;
+    return wf > 0.25 && wf < 0.95 && df > 0.02 && df < 0.60;
+  }
+
+  function detectMRZ(gray, w, h) {
+    var yTop = Math.floor(h * 0.40);
+    var minW = Math.floor(w * 0.10), maxW = Math.floor(w * 0.75);
+    var textRow = new Uint8Array(h);
+    var rowXmin = new Int32Array(h), rowXmax = new Int32Array(h);
     for (var y = 0; y < h; y++) {
+      var cnt = 0, mn = w, mx = -1, base = y * w;
       for (var x = 0; x < w; x++) {
-        if (gray[y * w + x] >= thr) {
-          count++;
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
+        if (gray[base + x] < 100) {
+          cnt++;
+          if (x < mn) mn = x;
+          if (x > mx) mx = x;
+        }
+      }
+      rowXmin[y] = mn; rowXmax[y] = mx;
+      textRow[y] = (cnt > minW && cnt < maxW) ? 1 : 0;
+    }
+
+    var bands = [];
+    var inBand = false, bandStart = 0, gap = 0;
+    for (var y = yTop; y < h; y++) {
+      if (textRow[y]) {
+        if (!inBand) { inBand = true; bandStart = y; gap = 0; }
+        else gap = 0;
+      } else if (inBand) {
+        gap++;
+        if (gap > 2) {
+          bands.push([bandStart, y - gap]);
+          inBand = false;
         }
       }
     }
-    if (!count) return { detected: false };
-    var bw = maxX - minX + 1, bh = maxY - minY + 1;
-    return {
-      detected: count / (w * h) > 0.15 &&
-        bw / bh > 1.1 && bw / bh < 2.4 &&
-        bw / w > 0.55 && bh / h > 0.5 &&
-        bw > 180 && bh > 110,
-      left: minX, right: maxX, top: minY, bottom: maxY, w: bw, h: bh
-    };
-  }
+    if (inBand) bands.push([bandStart, h - 1]);
+    if (!bands.length) return false;
 
-  function detectMRZ(gray, w, h, reg) {
-    var y0 = Math.max(reg.top + 1, reg.bottom - Math.round(reg.h * 0.34));
-    var y1 = reg.bottom - 1;
-    if (y1 - y0 < 12) return false;
-    var x0 = reg.left + 2, x1 = reg.right - 2;
-    if (x1 - x0 < 40) return false;
-    var run = 0, best = 0;
-    for (var y = y0; y <= y1; y++) {
-      var sum = 0, sumSq = 0;
-      for (var x = x0; x <= x1; x++) {
-        var g = gray[y * w + x];
-        sum += g; sumSq += g * g;
+    var candidate = null;
+    for (var i = 0; i < bands.length; i++) {
+      var b = bands[i];
+      if (b[1] - b[0] + 1 < 8) continue;
+      var x0 = w, x1 = -1;
+      for (var yy = b[0]; yy <= b[1]; yy++) {
+        if (rowXmin[yy] < x0) x0 = rowXmin[yy];
+        if (rowXmax[yy] > x1) x1 = rowXmax[yy];
       }
-      var n = x1 - x0 + 1;
-      var varr = sumSq / n - (sum / n) * (sum / n);
-      if (varr > 220) { run++; if (run > best) best = run; }
-      else run = 0;
+      if (x1 - x0 >= w * 0.45) candidate = b;
     }
-    return best >= 12;
+    if (!candidate) return false;
+
+    var y0 = candidate[0], y1 = candidate[1];
+    var run = 0, runStart = -1, bestGap = 0, bestGapY = -1;
+    for (var y = y0; y <= y1; y++) {
+      if (!textRow[y]) {
+        if (run === 0) runStart = y;
+        run++;
+        if (run > bestGap) { bestGap = run; bestGapY = runStart; }
+      } else run = 0;
+    }
+    if (bestGap < 2) return false;
+    var hTop = bestGapY - y0, hBot = y1 - (bestGapY + bestGap) + 1;
+    if (hTop < 3 || hBot < 3) return false;
+    var ratio = hTop > hBot ? hTop / hBot : hBot / hTop;
+    return ratio < 3;
   }
 
   function assessImage(blob) {
@@ -873,7 +895,8 @@
     } else if (d.mrz_error) {
       html += '<p style="color:var(--warn);font-size:14px">' + esc(d.mrz_error) + '</p>';
     } else {
-      html += '<p style="color:var(--muted);font-size:14px">No MRZ could be read — check the photo quality and try again.</p>';
+      html += '<p style="color:var(--error);font-size:14px;font-weight:600">This doesn\'t look like a valid passport — the MRZ couldn\'t be read or validated.</p>';
+      html += '<p style="color:var(--muted);font-size:14px">Make sure the data page is in focus with the two MRZ lines at the bottom clearly visible, then retake.</p>';
     }
     var checks = [];
     checks.push(['MRZ read', d.ocr_detected === true]);
