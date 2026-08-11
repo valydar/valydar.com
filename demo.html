@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Demo — Valydar Identity Verification</title>
+<meta name="description" content="Try Valydar's identity verification live. Upload a document, add a selfie, and see MRZ reading, face matching, AML screening and NFC chip verification in action.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🛡️</text></svg>">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --accent:#6366f1;--accent-light:#818cf8;--accent-dark:#4f46e5;
+    --bg:#0a0a0f;--bg-alt:#111119;--surface:#16161f;--surface-light:#1e1e2a;
+    --border:#2a2a3a;--text:#e4e4ed;--muted:#8888a0;--white:#fff;
+    --success:#22c55e;--warn:#f59e0b;--error:#ef4444;
+    --font:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --mono:'SF Mono','Cascadia Code','Fira Code',monospace;
+    --max-w:760px;--radius:12px;
+  }
+  html{scroll-behavior:smooth}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-light);text-decoration:none;transition:color .2s}
+  a:hover{color:var(--white)}
+
+  /* ── NAV ── */
+  nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(10,10,15,.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between}
+  .nav-logo{font-size:20px;font-weight:700;color:var(--white);display:flex;align-items:center;gap:8px}
+  .nav-logo span{color:var(--accent)}
+  .nav-back{color:var(--muted);font-size:14px;font-weight:500}
+
+  /* ── HERO ── */
+  .hero{padding:140px 24px 60px;text-align:center;position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:700px;height:700px;background:radial-gradient(circle,rgba(99,102,241,.14) 0%,transparent 70%);pointer-events:none}
+  .hero-badge{display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 16px;font-size:13px;color:var(--muted);margin-bottom:20px}
+  .hero h1{font-size:clamp(32px,5vw,48px);font-weight:800;line-height:1.15;color:var(--white);margin-bottom:16px}
+  .hero h1 em{font-style:normal;color:var(--accent)}
+  .hero p{font-size:17px;color:var(--muted);max-width:600px;margin:0 auto}
+
+  /* ── PRIVACY NOTE ── */
+  .privacy-note{max-width:var(--max-w);margin:0 auto 24px;padding:12px 16px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);border-radius:var(--radius);color:var(--muted);font-size:13px;text-align:center}
+
+  /* ── WIZARD ── */
+  .wizard{max-width:var(--max-w);margin:0 auto 80px;padding:0 24px;display:grid;gap:20px}
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px}
+  .step-head{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  .step-num{width:32px;height:32px;border-radius:50%;background:rgba(99,102,241,.15);color:var(--accent-light);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
+  .step h2{font-size:18px;font-weight:600;color:var(--white)}
+  .step .sub{font-size:13px;color:var(--muted);margin-top:2px}
+  .optional{display:inline-block;margin-left:8px;font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:1px 8px;vertical-align:2px}
+
+  /* ── FILE ZONES ── */
+  .drop{border:2px dashed var(--border);border-radius:var(--radius);padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s}
+  .drop:hover,.drop.drag{border-color:var(--accent);background:rgba(99,102,241,.04)}
+  .drop-icon{font-size:28px;margin-bottom:10px}
+  .drop p{font-size:14px;color:var(--muted)}
+  .drop p strong{color:var(--text)}
+  .drop small{font-size:12px;color:var(--muted)}
+  input[type=file]{display:none}
+  .preview{margin-top:16px;display:none;align-items:center;gap:16px}
+  .preview img{width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+  .preview .meta{font-size:13px;color:var(--muted)}
+  .preview .clear{background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0}
+
+  /* ── FORM FIELDS ── */
+  label.field-label{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px}
+  input[type=text]{width:100%;background:var(--bg-alt);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-size:15px;outline:none;transition:border-color .2s}
+  input[type=text]:focus{border-color:var(--accent)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* ── NFC CHIP ── */
+  .chip-status{display:flex;align-items:center;gap:10px;background:var(--bg-alt);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:14px;color:var(--muted)}
+  .chip-status .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .chip-status.capable .dot{background:var(--success)}
+  .chip-status.unknown .dot{background:var(--warn)}
+  .chip-status.skipped .dot{background:var(--muted)}
+  .chip-status.failed .dot{background:var(--error)}
+  .chip-actions{margin-top:14px}
+  .chip-scan-btn{display:none}
+  details.advanced{margin-top:16px;border:1px solid var(--border);border-radius:8px;background:var(--bg-alt)}
+  details.advanced summary{cursor:pointer;padding:12px 16px;font-size:13px;font-weight:600;color:var(--muted);list-style:none}
+  details.advanced summary::before{content:'▸ ';color:var(--accent)}
+  details.advanced[open] summary::before{content:'▾ '}
+  details.advanced .body{padding:0 16px 16px}
+  textarea{width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;resize:vertical}
+  .nfc-hint{font-size:12px;color:var(--muted);margin-top:8px}
+
+  /* ── BUTTONS ── */
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:none;transition:all .2s;font-family:var(--font)}
+  .btn-primary{background:var(--accent);color:var(--white)}
+  .btn-primary:hover{background:var(--accent-dark);color:var(--white);transform:translateY(-1px)}
+  .btn-primary:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;transform:none}
+  .btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+  .btn-secondary:hover{border-color:var(--accent);color:var(--white)}
+  .run-row{text-align:center;margin-top:8px}
+
+  /* ── RESULTS ── */
+  .results{max-width:var(--max-w);margin:0 auto 80px;padding:0 24px;display:none}
+  .verdict{border-radius:var(--radius);padding:28px;text-align:center;margin-bottom:20px}
+  .verdict.pass{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.35)}
+  .verdict.fail{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.35)}
+  .verdict .icon{font-size:36px;margin-bottom:8px}
+  .verdict h2{font-size:24px;font-weight:800;color:var(--white);margin-bottom:4px}
+  .verdict p{font-size:14px;color:var(--muted)}
+  .result-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px}
+  .result-card h3{font-size:16px;font-weight:700;color:var(--white);margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 12px;border-radius:999px}
+  .badge.pass{background:rgba(34,197,94,.12);color:var(--success)}
+  .badge.fail{background:rgba(239,68,68,.12);color:var(--error)}
+  .badge.skip{background:rgba(148,163,184,.12);color:var(--muted)}
+  table{width:100%;border-collapse:collapse}
+  td{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+  td:last-child{text-align:right;color:var(--text);font-family:var(--mono);word-break:break-all}
+  tr:last-child td{border-bottom:none}
+  .checks{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
+  .chip.ok{color:var(--success);border-color:rgba(34,197,94,.35)}
+  .chip.no{color:var(--error);border-color:rgba(239,68,68,.35)}
+  .bar{height:8px;background:var(--bg-alt);border-radius:999px;overflow:hidden;margin-top:8px}
+  .bar span{display:block;height:100%;border-radius:999px;background:var(--accent)}
+  .metric{font-size:13px;color:var(--muted);margin-top:8px;display:flex;justify-content:space-between}
+  details.raw{margin-top:16px}
+  details.raw summary{cursor:pointer;font-size:13px;color:var(--muted);font-weight:600}
+  pre.raw-json{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-family:var(--mono);font-size:12px;color:var(--muted);overflow:auto;max-height:320px;margin-top:8px;white-space:pre-wrap;word-break:break-all}
+
+  .loading{display:none;max-width:var(--max-w);margin:0 auto 40px;padding:0 24px;text-align:center}
+  .spinner{width:40px;height:40px;border:4px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loading p{color:var(--muted);font-size:14px}
+
+  .error-banner{display:none;max-width:var(--max-w);margin:0 auto 24px;padding:16px 20px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.35);border-radius:var(--radius);color:var(--error);font-size:14px}
+
+  footer{max-width:var(--max-w);margin:0 auto 60px;padding:0 24px;text-align:center;color:var(--muted);font-size:13px}
+
+  @media(max-width:640px){.nav-back{display:none}}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo"><span>◆</span> valydar</a>
+  <a href="/" class="nav-back">← Back to site</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">Live Demo — no account required</div>
+  <h1>Experience <em>identity verification</em> in 60 seconds</h1>
+  <p>Upload a passport or ID card, add a selfie and your name — then watch MRZ reading, face matching, NFC chip verification and AML screening run in real time.</p>
+</section>
+
+<div class="privacy-note">🔒 <strong>Privacy first:</strong> your images and name are processed in memory on the server and never stored or logged.</div>
+
+<div class="error-banner" id="errorBanner"></div>
+
+<!-- WIZARD -->
+<div class="wizard" id="wizard">
+
+  <!-- Step 1: Document -->
+  <div class="step" id="stepDoc">
+    <div class="step-head">
+      <div class="step-num">1</div>
+      <div>
+        <h2>Upload your document</h2>
+        <div class="sub">A passport or national ID. Make sure the machine-readable zone at the bottom is clearly visible.</div>
+      </div>
+    </div>
+    <div class="drop" id="docDrop">
+      <div class="drop-icon">📄</div>
+      <p><strong>Drop your document here</strong> or <span style="color:var(--accent-light)">browse</span></p>
+      <small>JPG / PNG, up to 10 MB</small>
+      <input type="file" id="docInput" accept="image/*">
+    </div>
+    <div class="preview" id="docPreview">
+      <img id="docPreviewImg" alt="document preview">
+      <div class="meta">
+        <div id="docPreviewName"></div>
+        <small id="docPreviewSize"></small>
+      </div>
+      <button class="clear" id="docClear">Remove</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Selfie -->
+  <div class="step" id="stepSelfie">
+    <div class="step-head">
+      <div class="step-num">2</div>
+      <div>
+        <h2>Add a selfie <span class="optional">optional</span></h2>
+        <div class="sub">We'll match the face on your document against your selfie.</div>
+      </div>
+    </div>
+    <div class="drop" id="selfieDrop">
+      <div class="drop-icon">🤳</div>
+      <p><strong>Drop your selfie here</strong> or <span style="color:var(--accent-light)">browse</span></p>
+      <small>JPG / PNG, up to 10 MB</small>
+      <input type="file" id="selfieInput" accept="image/*">
+    </div>
+    <div class="preview" id="selfiePreview">
+      <img id="selfiePreviewImg" alt="selfie preview">
+      <div class="meta">
+        <div id="selfiePreviewName"></div>
+        <small id="selfiePreviewSize"></small>
+      </div>
+      <button class="clear" id="selfieClear">Remove</button>
+    </div>
+  </div>
+
+  <!-- Step 3: NFC chip -->
+  <div class="step" id="stepChip">
+    <div class="step-head">
+      <div class="step-num">3</div>
+      <div>
+        <h2>NFC chip verification <span class="optional">optional</span></h2>
+        <div class="sub">Passive authentication against the ePassport chip. Runs automatically when the device can read it.</div>
+      </div>
+    </div>
+    <div class="chip-status" id="chipStatus">
+      <span class="dot"></span>
+      <span id="chipStatusText">Checking NFC capability on this device…</span>
+    </div>
+    <div class="chip-actions" id="chipActions">
+      <button class="btn btn-secondary chip-scan-btn" id="chipScanBtn">📡 Scan for chip</button>
+    </div>
+    <details class="advanced">
+      <summary>Advanced — supply chip data from an NFC reader or mobile SDK</summary>
+      <div class="body">
+        <p class="nfc-hint" style="margin-bottom:10px">If you read the chip with an external tool (mobile SDK, desktop reader), paste the JSON payload here to run full passive / active / chip authentication.</p>
+        <textarea id="nfcInput" placeholder='{"mrz_data":{...},"security_object":{...},"chip_info":{...},"data_groups":{...}}'></textarea>
+      </div>
+    </details>
+  </div>
+
+  <!-- Step 4: AML -->
+  <div class="step" id="stepAml">
+    <div class="step-head">
+      <div class="step-num">4</div>
+      <div>
+        <h2>Your full name <span class="optional">optional</span></h2>
+        <div class="sub">We'll screen it against sanctions &amp; PEP lists (AML).</div>
+      </div>
+    </div>
+    <label class="field-label" for="nameInput">Full name as shown on the document</label>
+    <input type="text" id="nameInput" placeholder="e.g. Jane Maria Smith" autocomplete="off">
+    <div class="hint">Only used for this demo run — never stored.</div>
+  </div>
+
+  <div class="run-row">
+    <button class="btn btn-primary" id="runBtn" disabled>Run verification →</button>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading" id="loading">
+  <div class="spinner"></div>
+  <p id="loadingText">Running document check &amp; MRZ reading…</p>
+</div>
+
+<!-- RESULTS -->
+<div class="results" id="results"></div>
+
+<footer>Valydar — demo runs against the sandbox environment. Nothing is stored.</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var API = 'https://api.dev.valydar.com/demo/verify';
+  var MAX = 10 * 1024 * 1024;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var state = {
+    doc: null,
+    selfie: null,
+    name: '',
+    nfc: null,
+    nfcCapable: false
+  };
+
+  // ── File zones ──
+  function setupDrop(dropId, inputId, previewId, imgId, nameId, sizeId, clearId, setter) {
+    var drop = $(dropId), input = $(inputId), preview = $(previewId),
+        img = $(imgId), nameEl = $(nameId), sizeEl = $(sizeId), clear = $(clearId);
+
+    drop.addEventListener('click', function () { input.click(); });
+    drop.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      drop.classList.add('drag');
+    });
+    drop.addEventListener('dragleave', function () { drop.classList.remove('drag'); });
+    drop.addEventListener('drop', function (e) {
+      e.preventDefault();
+      drop.classList.remove('drag');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    input.addEventListener('change', function () {
+      if (input.files.length) handleFile(input.files[0]);
+    });
+
+    function handleFile(file) {
+      if (!file.type.match(/^image\//)) {
+        showError('Please choose an image file (JPG or PNG).');
+        return;
+      }
+      if (file.size > MAX) {
+        showError('That file is larger than 10 MB. Please choose a smaller image.');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        setter(file);
+        img.src = e.target.result;
+        nameEl.textContent = file.name;
+        sizeEl.textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+        preview.style.display = 'flex';
+        drop.style.display = 'none';
+        updateRun();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    clear.addEventListener('click', function () {
+      setter(null);
+      input.value = '';
+      preview.style.display = 'none';
+      drop.style.display = '';
+      updateRun();
+    });
+  }
+
+  setupDrop('docDrop', 'docInput', 'docPreview', 'docPreviewImg',
+    'docPreviewName', 'docPreviewSize', 'docClear',
+    function (f) { state.doc = f; });
+  setupDrop('selfieDrop', 'selfieInput', 'selfiePreview', 'selfiePreviewImg',
+    'selfiePreviewName', 'selfiePreviewSize', 'selfieClear',
+    function (f) { state.selfie = f; });
+
+  $('nameInput').addEventListener('input', function () {
+    state.name = this.value.trim();
+    updateRun();
+  });
+
+  // ── NFC capability detection ──
+  function nfcSupported() {
+    return typeof window !== 'undefined' &&
+      (('NDEFReader' in window) || ('nfc' in navigator));
+  }
+
+  function updateChipStatus(cls, text) {
+    var el = $('chipStatus');
+    el.className = 'chip-status ' + cls;
+    $('chipStatusText').textContent = text;
+  }
+
+  function initChip() {
+    state.nfcCapable = nfcSupported();
+    if (state.nfcCapable) {
+      updateChipStatus('capable', 'NFC reader detected. Tap your passport to the back of your phone to read the chip.');
+      $('chipScanBtn').style.display = '';
+      $('chipScanBtn').addEventListener('click', attemptChipScan);
+    } else {
+      updateChipStatus('skipped', 'This device / browser can\'t read NFC chips — the chip check will be skipped automatically. (Full chip verification is available via our mobile SDKs and desktop readers.)');
+    }
+  }
+
+  function attemptChipScan() {
+    updateChipStatus('unknown', 'Scanning for chip — hold your passport against the back of your phone…');
+    var reader;
+    try {
+      reader = new NDEFReader();
+    } catch (e) {
+      updateChipStatus('failed', 'Could not start an NFC scan on this browser.');
+      return;
+    }
+    var timeout = setTimeout(function () {
+      reader.onreading = null;
+      reader.onreadingerror = null;
+      updateChipStatus('skipped', 'No readable chip found — browsers can only read NFC tags, not ePassport chips. The chip check is skipped. (Full chip authentication runs in our mobile SDKs.)');
+    }, 10000);
+    reader.scan().then(function () {
+      reader.onreading = function (event) {
+        clearTimeout(timeout);
+        updateChipStatus('unknown', 'NFC tag detected, but ePassports can\'t be read through the browser (WebNFC is NDEF-only). Use the advanced section below or our mobile SDK for full chip verification.');
+      };
+      reader.onreadingerror = function () {
+        clearTimeout(timeout);
+        updateChipStatus('skipped', 'Couldn\'t read a chip — the chip check is skipped. (Full chip authentication runs in our mobile SDKs.)');
+      };
+    }).catch(function (err) {
+      clearTimeout(timeout);
+      if (err && err.name === 'NotAllowedError') {
+        updateChipStatus('skipped', 'NFC permission was denied — the chip check is skipped.');
+      } else {
+        updateChipStatus('skipped', 'NFC scan not available — the chip check is skipped. (Full chip authentication runs in our mobile SDKs.)');
+      }
+    });
+  }
+
+  $('nfcInput').addEventListener('input', function () {
+    var raw = this.value.trim();
+    if (!raw) {
+      state.nfc = null;
+      updateRun();
+      return;
+    }
+    try {
+      state.nfc = JSON.parse(raw);
+      updateChipStatus('capable', 'Chip data loaded — passive / active / chip authentication will run.');
+    } catch (e) {
+      state.nfc = null;
+      updateChipStatus('unknown', 'Pasted NFC data isn\'t valid JSON yet.');
+    }
+    updateRun();
+  });
+
+  // ── Run ──
+  function updateRun() {
+    $('runBtn').disabled = !state.doc;
+  }
+
+  $('runBtn').addEventListener('click', function () {
+    var btn = $('runBtn');
+    btn.disabled = true;
+    $('errorBanner').style.display = 'none';
+    $('results').style.display = 'none';
+    $('wizard').style.display = 'none';
+    $('loading').style.display = '';
+    $('loadingText').textContent = 'Running document check &amp; MRZ reading…';
+
+    var fd = new FormData();
+    fd.append('file', state.doc);
+    if (state.selfie) {
+      fd.append('selfie', state.selfie);
+      $('loadingText').textContent = 'Matching the face on your document with your selfie…';
+    }
+    if (state.name) fd.append('full_name', state.name);
+    if (state.nfc) fd.append('nfc', JSON.stringify(state.nfc));
+
+    fetch(API, { method: 'POST', body: fd })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          throw new Error((result.data && result.data.error && result.data.error.message) ||
+            'Verification failed — please try again.');
+        }
+        renderResults(result.data);
+      })
+      .catch(function (err) {
+        $('loading').style.display = 'none';
+        $('wizard').style.display = 'grid';
+        showError(err.message || 'Something went wrong. Please try again.');
+      })
+      .finally(function () {
+        $('loading').style.display = 'none';
+        btn.disabled = false;
+      });
+  });
+
+  function showError(msg) {
+    var b = $('errorBanner');
+    b.textContent = msg;
+    b.style.display = '';
+    b.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // ── Rendering ──
+  function esc(s) {
+    return String(s === undefined || s === null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function badge(passed, passLabel, failLabel) {
+    if (passed === true) return '<span class="badge pass">✓ ' + esc(passLabel || 'Passed') + '</span>';
+    if (passed === false) return '<span class="badge fail">✕ ' + esc(failLabel || 'Failed') + '</span>';
+    return '<span class="badge skip">— ' + esc(passLabel || 'Not run') + '</span>';
+  }
+
+  function renderResults(data) {
+    var doc = data.document || {};
+    var fm = data.face_match;
+    var aml = data.aml;
+    var nfc = data.nfc;
+    var d = doc.details || {};
+
+    var allPassed = doc.passed === true &&
+      (!fm || fm.passed === true) &&
+      (!aml || aml.passed === true) &&
+      (!nfc || nfc.passed === true);
+
+    var html = '';
+    html += '<div class="verdict ' + (allPassed ? 'pass' : 'fail') + '">';
+    html += '<div class="icon">' + (allPassed ? '✅' : '⚠️') + '</div>';
+    html += '<h2>' + (allPassed ? 'Verification complete' : 'Verification needs attention') + '</h2>';
+    html += '<p>' + (allPassed
+      ? 'Every check passed. This is what your customers would experience.'
+      : 'Some checks did not pass — see each step below for details.') + '</p>';
+    html += '</div>';
+
+    // ── Document ──
+    html += '<div class="result-card">';
+    html += '<h3>📄 Document &amp; MRZ <span>' + badge(doc.passed) + '</span></h3>';
+    if (d.error) html += '<p style="color:var(--error);font-size:14px">' + esc(d.error) + '</p>';
+    var mrz = d.mrz;
+    if (mrz && d.mrz_parsed) {
+      html += '<table>';
+      html += '<tr><td>Type</td><td>' + esc(mrz.document_type || '') + '</td></tr>';
+      html += '<tr><td>Issuing country</td><td>' + esc(mrz.issuing_country || '') + '</td></tr>';
+      html += '<tr><td>Name</td><td>' + esc([mrz.primary_identifier, mrz.secondary_identifier].filter(Boolean).join(' ')) + '</td></tr>';
+      html += '<tr><td>Document number</td><td>' + esc(mrz.document_number || '') + '</td></tr>';
+      html += '<tr><td>Nationality</td><td>' + esc(mrz.nationality || '') + '</td></tr>';
+      html += '<tr><td>Date of birth</td><td>' + esc(mrz.date_of_birth || '') + '</td></tr>';
+      html += '<tr><td>Sex</td><td>' + esc(mrz.sex || '') + '</td></tr>';
+      html += '<tr><td>Expiry date</td><td>' + esc(mrz.expiry_date || '') + '</td></tr>';
+      html += '</table>';
+    } else if (d.mrz_error) {
+      html += '<p style="color:var(--warn);font-size:14px">' + esc(d.mrz_error) + '</p>';
+    } else {
+      html += '<p style="color:var(--muted);font-size:14px">No MRZ could be read — check the photo quality and try again.</p>';
+    }
+    var checks = [];
+    checks.push(['MRZ read', d.ocr_detected === true]);
+    checks.push(['MRZ parsed', d.mrz_parsed === true]);
+    checks.push(['Barcodes', d.barcodes_detected === true]);
+    checks.push(['Template match', d.template_mrz_valid === true]);
+    checks.push(['Security features', d.security_features_passed === true]);
+    html += '<div class="checks">';
+    checks.forEach(function (c) {
+      var ok = c[1];
+      html += '<span class="chip ' + (ok ? 'ok' : 'no') + '">' + esc(c[0]) + (ok ? ' ✓' : ' ✕') + '</span>';
+    });
+    html += '</div>';
+    html += rawDetails(doc);
+    html += '</div>';
+
+    // ── Face match ──
+    html += '<div class="result-card">';
+    html += '<h3>🤳 Face match <span>' + (fm ? badge(fm.passed) : badge(null, 'Skipped')) + '</span></h3>';
+    if (fm) {
+      var conf = Math.round((fm.confidence || 0) * 100);
+      html += '<table>';
+      html += '<tr><td>Confidence</td><td>' + conf + '%</td></tr>';
+      html += '<tr><td>Face in document</td><td>' + (fm.document_face ? 'Detected' : 'Not found') + '</td></tr>';
+      html += '<tr><td>Face in selfie</td><td>' + (fm.selfie_face ? 'Detected' : 'Not found') + '</td></tr>';
+      html += '</table>';
+      html += '<div class="bar"><span style="width:' + conf + '%"></span></div>';
+      html += '<div class="metric"><span>Confidence</span><span>' + conf + '%</span></div>';
+    } else {
+      html += '<p style="color:var(--muted);font-size:14px">Add a selfie in step 2 to run a face match against your document.</p>';
+    }
+    html += '</div>';
+
+    // ── AML ──
+    html += '<div class="result-card">';
+    html += '<h3>🛡️ AML &amp; sanctions screening <span>' + (aml ? badge(aml.passed) : badge(null, 'Skipped')) + '</span></h3>';
+    if (aml) {
+      var risk = Math.round((aml.risk_score || 0) * 100);
+      html += '<table>';
+      html += '<tr><td>Risk score</td><td>' + risk + '%</td></tr>';
+      html += '<tr><td>Sanctions / PEP matches</td><td>' + (aml.matches ? aml.matches.length : 0) + '</td></tr>';
+      html += '</table>';
+      html += '<div class="bar"><span style="width:' + risk + '%"></span></div>';
+      html += '<div class="metric"><span>Risk score</span><span>' + risk + '%</span></div>';
+      if (aml.matches && aml.matches.length) {
+        html += '<div class="checks">' + aml.matches.map(function (m) {
+          return '<span class="chip no">' + esc(m.list_name + ' — ' + m.matched_name) + '</span>';
+        }).join('') + '</div>';
+      }
+    } else {
+      html += '<p style="color:var(--muted);font-size:14px">Add your name in step 4 to run sanctions &amp; PEP screening.</p>';
+    }
+    html += '</div>';
+
+    // ── NFC chip ──
+    html += '<div class="result-card">';
+    html += '<h3>📡 NFC chip (ePassport) <span>' + (nfc ? badge(nfc.passed) : badge(null, 'Skipped')) + '</span></h3>';
+    if (nfc) {
+      var pa = nfc.passive_auth || {};
+      html += '<table>';
+      html += '<tr><td>Passive auth</td><td>' + (pa.passed ? 'Passed' : 'Failed') + '</td></tr>';
+      html += '<tr><td>Certificate chain</td><td>' + (pa.certificate_chain_valid ? 'Valid' : 'Invalid') + '</td></tr>';
+      html += '<tr><td>DG hashes</td><td>' + (pa.dg_hashes_match ? 'Match' : 'Mismatch') + '</td></tr>';
+      html += '<tr><td>Verified data groups</td><td>' + esc((pa.verified_data_groups || []).join(', ')) + '</td></tr>';
+      if (nfc.active_auth) html += '<tr><td>Active auth</td><td>' + (nfc.active_auth.passed ? 'Passed' : 'Failed') + '</td></tr>';
+      if (nfc.chip_auth) html += '<tr><td>Chip auth</td><td>' + (nfc.chip_auth.passed ? 'Passed' : 'Failed') + '</td></tr>';
+      html += '</table>';
+      if (pa.errors && pa.errors.length) {
+        html += '<div class="checks">' + pa.errors.map(function (e) {
+          return '<span class="chip no">' + esc(e) + '</span>';
+        }).join('') + '</div>';
+      }
+    } else {
+      html += '<p style="color:var(--muted);font-size:14px">Chip verification was skipped — it runs automatically when the device can read the passport chip (mobile SDKs, desktop readers).</p>';
+    }
+    html += '</div>';
+
+    html += '<div style="text-align:center;margin-top:8px">';
+    html += '<button class="btn btn-secondary" onclick="location.reload()">↻ Run another verification</button>';
+    html += '</div>';
+
+    $('results').innerHTML = html;
+    $('loading').style.display = 'none';
+    $('results').style.display = '';
+    $('results').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function rawDetails(obj) {
+    var json = JSON.stringify(obj, null, 2);
+    return '<details class="raw"><summary>View raw engine output</summary>' +
+      '<pre class="raw-json">' + esc(json) + '</pre></details>';
+  }
+
+  initChip();
+  updateRun();
+})();
+</script>
+</body>
+</html>
