@@ -340,7 +340,7 @@
   var cam = { stream: null, timer: null, capturing: false, lastFrame: null, countdownStart: null };
 
   var SAMPLE_W = 480, SAMPLE_H = 360;
-  var AUTO_MIN_SHARP = 22, AUTO_MIN_SHARP_DOC = 35, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
+  var AUTO_MIN_SHARP = 22, AUTO_MIN_SHARP_DOC = 28, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
   var FACE_MIN_FRAC = 0.18;
   var COUNTDOWN_SEC = 3;
   var SAMPLE = document.createElement('canvas');
@@ -593,19 +593,21 @@
   }
 
   function detectMRZ(gray, w, h) {
-    var yTop = Math.floor(h * 0.40);
-    var minW = Math.floor(w * 0.10), maxW = Math.floor(w * 0.75);
+    var yTop = Math.floor(h * 0.30);
+    var minW = Math.floor(w * 0.06), maxW = Math.floor(w * 0.88);
     var textRow = new Uint8Array(h);
+    var rowCnt = new Int32Array(h);
     var rowXmin = new Int32Array(h), rowXmax = new Int32Array(h);
     for (var y = 0; y < h; y++) {
       var cnt = 0, mn = w, mx = -1, base = y * w;
       for (var x = 0; x < w; x++) {
-        if (gray[base + x] < 100) {
+        if (gray[base + x] < 120) {
           cnt++;
           if (x < mn) mn = x;
           if (x > mx) mx = x;
         }
       }
+      rowCnt[y] = cnt;
       rowXmin[y] = mn; rowXmax[y] = mx;
       textRow[y] = (cnt > minW && cnt < maxW) ? 1 : 0;
     }
@@ -618,42 +620,69 @@
         else gap = 0;
       } else if (inBand) {
         gap++;
-        if (gap > 2) {
-          bands.push([bandStart, y - gap]);
-          inBand = false;
-        }
+        if (gap > 2) { bands.push([bandStart, y - gap]); inBand = false; }
       }
     }
     if (inBand) bands.push([bandStart, h - 1]);
     if (!bands.length) return false;
 
-    var candidate = null;
-    for (var i = 0; i < bands.length; i++) {
-      var b = bands[i];
-      if (b[1] - b[0] + 1 < 8) continue;
+    function lineSpan(r) {
       var x0 = w, x1 = -1;
-      for (var yy = b[0]; yy <= b[1]; yy++) {
+      for (var yy = r[0]; yy <= r[1]; yy++) {
         if (rowXmin[yy] < x0) x0 = rowXmin[yy];
         if (rowXmax[yy] > x1) x1 = rowXmax[yy];
       }
-      if (x1 - x0 >= w * 0.45) candidate = b;
+      return x1 - x0 + 1;
     }
-    if (!candidate) return false;
 
-    var y0 = candidate[0], y1 = candidate[1];
-    var run = 0, runStart = -1, bestGap = 0, bestGapY = -1;
-    for (var y = y0; y <= y1; y++) {
-      if (!textRow[y]) {
-        if (run === 0) runStart = y;
-        run++;
-        if (run > bestGap) { bestGap = run; bestGapY = runStart; }
-      } else run = 0;
+    function linesOk(up, lo) {
+      var hUp = up[1] - up[0] + 1, hLo = lo[1] - lo[0] + 1;
+      if (hUp < 3 || hLo < 3) return false;
+      var hr = hUp > hLo ? hUp / hLo : hLo / hUp;
+      if (hr >= 2.5) return false;
+      var mUp = 0, mLo = 0;
+      for (var yy = up[0]; yy <= up[1]; yy++) {
+        if (rowCnt[yy] > mUp) mUp = rowCnt[yy];
+      }
+      for (var yy = lo[0]; yy <= lo[1]; yy++) {
+        if (rowCnt[yy] > mLo) mLo = rowCnt[yy];
+      }
+      if (mUp >= w * 0.60 || mLo >= w * 0.60) return false;
+      var sUp = lineSpan(up), sLo = lineSpan(lo);
+      if (sUp < w * 0.32 || sLo < w * 0.32) return false;
+      var sr = sUp > sLo ? sUp / sLo : sLo / sUp;
+      return sr < 1.6;
     }
-    if (bestGap < 2) return false;
-    var hTop = bestGapY - y0, hBot = y1 - (bestGapY + bestGap) + 1;
-    if (hTop < 3 || hBot < 3) return false;
-    var ratio = hTop > hBot ? hTop / hBot : hBot / hTop;
-    return ratio < 3;
+
+    for (var i = bands.length - 1; i >= 0; i--) {
+      var b = bands[i];
+      var maxC = 0;
+      for (var yy = b[0]; yy <= b[1]; yy++) {
+        if (rowCnt[yy] > maxC) maxC = rowCnt[yy];
+      }
+      var cands = [];
+      for (var yy = b[0] + 1; yy < b[1]; yy++) {
+        if (rowCnt[yy] < maxC * 0.75) cands.push(yy);
+      }
+      cands.sort(function (a, c) { return rowCnt[a] - rowCnt[c]; });
+      for (var k = 0; k < cands.length && k < 8; k++) {
+        var splitY = cands[k];
+        if (linesOk([b[0], splitY - 1], [splitY + 1, b[1]])) {
+          return true;
+        }
+      }
+      if (i > 0) {
+        var above = bands[i - 1];
+        var gapBetween = b[0] - above[1] - 1;
+        var hb = b[1] - b[0] + 1, ha = above[1] - above[0] + 1;
+        if (hb <= h * 0.12 && ha <= h * 0.12 &&
+            gapBetween <= Math.max(8, Math.round(Math.min(ha, hb) * 2)) &&
+            linesOk(above, b)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   function assessImage(blob) {
