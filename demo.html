@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Demo — Valydar Identity Verification</title>
-<meta name="description" content="Try Valydar's identity verification live. Upload a document, add a selfie, and see MRZ reading, face matching, AML screening and NFC chip verification in action.">
+<meta name="description" content="Try Valydar's identity verification live. Capture a document and a selfie with your camera, and see MRZ reading, face matching, AML screening and NFC chip verification in action.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🛡️</text></svg>">
 <style>
@@ -35,7 +35,7 @@
   .hero-badge{display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 16px;font-size:13px;color:var(--muted);margin-bottom:20px}
   .hero h1{font-size:clamp(32px,5vw,48px);font-weight:800;line-height:1.15;color:var(--white);margin-bottom:16px}
   .hero h1 em{font-style:normal;color:var(--accent)}
-  .hero p{font-size:17px;color:var(--muted);max-width:600px;margin:0 auto}
+  .hero p{font-size:17px;color:var(--muted);max-width:620px;margin:0 auto}
 
   /* ── PRIVACY NOTE ── */
   .privacy-note{max-width:var(--max-w);margin:0 auto 24px;padding:12px 16px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);border-radius:var(--radius);color:var(--muted);font-size:13px;text-align:center}
@@ -43,24 +43,45 @@
   /* ── WIZARD ── */
   .wizard{max-width:var(--max-w);margin:0 auto 80px;padding:0 24px;display:grid;gap:20px}
   .step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px}
+  .step.done{border-color:rgba(34,197,94,.45)}
+  .step.done .step-num{background:rgba(34,197,94,.15);color:var(--success)}
   .step-head{display:flex;align-items:center;gap:14px;margin-bottom:20px}
   .step-num{width:32px;height:32px;border-radius:50%;background:rgba(99,102,241,.15);color:var(--accent-light);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
   .step h2{font-size:18px;font-weight:600;color:var(--white)}
   .step .sub{font-size:13px;color:var(--muted);margin-top:2px}
   .optional{display:inline-block;margin-left:8px;font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:1px 8px;vertical-align:2px}
 
-  /* ── FILE ZONES ── */
-  .drop{border:2px dashed var(--border);border-radius:var(--radius);padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s}
-  .drop:hover,.drop.drag{border-color:var(--accent);background:rgba(99,102,241,.04)}
-  .drop-icon{font-size:28px;margin-bottom:10px}
-  .drop p{font-size:14px;color:var(--muted)}
-  .drop p strong{color:var(--text)}
-  .drop small{font-size:12px;color:var(--muted)}
-  input[type=file]{display:none}
-  .preview{margin-top:16px;display:none;align-items:center;gap:16px}
-  .preview img{width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
-  .preview .meta{font-size:13px;color:var(--muted)}
-  .preview .clear{background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0}
+  /* ── CAMERA CAPTURE ── */
+  .cam{background:var(--bg-alt);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .cam-start{padding:32px 20px;text-align:center}
+  .cam-icon{font-size:32px;margin-bottom:12px}
+  .cam-start p{font-size:14px;color:var(--muted);margin-bottom:18px;max-width:420px;margin-left:auto;margin-right:auto}
+  .cam-start p strong{color:var(--text)}
+  .cam-note{display:none;margin-top:14px;color:var(--error);font-size:13px;max-width:460px;margin-left:auto;margin-right:auto}
+  .cam-note a{color:var(--accent-light)}
+  .cam-skip{display:block;margin-top:14px;font-size:13px;color:var(--muted)}
+  .cam-skip:hover{color:var(--white)}
+  .cam-stage{position:relative;display:none;background:#000}
+  .cam-stage video{width:100%;display:block;max-height:440px;object-fit:cover}
+  .cam-overlay{position:absolute;inset:0;pointer-events:none}
+  .cam-frame{position:absolute;border:2px solid rgba(99,102,241,.85);border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.38)}
+  .cam-frame.doc{width:76%;left:12%;top:16%;aspect-ratio:1.4}
+  .cam-frame.selfie{width:48%;left:26%;top:12%;aspect-ratio:.78;border-radius:50%}
+  .cam-hint{position:absolute;bottom:100px;left:50%;transform:translateX(-50%);width:max-content;max-width:90%;text-align:center;color:#fff;font-size:13px;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,.7);background:rgba(0,0,0,.45);padding:6px 14px;border-radius:999px}
+  .cam-btn{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);width:60px;height:60px;border-radius:50%;border:4px solid #fff;background:rgba(255,255,255,.28);cursor:pointer;pointer-events:auto;padding:0}
+  .cam-btn::after{content:'';position:absolute;inset:5px;border-radius:50%;background:#fff;transition:background .2s}
+  .cam-btn.ready::after{background:var(--success)}
+  .cam-btn:active::after{background:var(--accent)}
+
+  /* ── CAPTURE PREVIEW ── */
+  .capture-preview{display:none;margin-top:16px;background:var(--bg-alt);border:1px solid var(--border);border-radius:var(--radius);padding:16px;align-items:center;gap:18px;flex-wrap:wrap}
+  .capture-preview img{width:180px;max-height:130px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex-shrink:0}
+  .capture-name{font-size:15px;font-weight:600;color:var(--white)}
+  .quality{margin:6px 0 12px;font-size:12px;font-weight:700}
+  .quality.ok{color:var(--success)}
+  .quality.warn{color:var(--warn)}
+  .quality.fail{color:var(--error)}
+  .capture-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
 
   /* ── FORM FIELDS ── */
   label.field-label{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px}
@@ -146,7 +167,7 @@
 <section class="hero">
   <div class="hero-badge">Live Demo — no account required</div>
   <h1>Experience <em>identity verification</em> in 60 seconds</h1>
-  <p>Upload a passport or ID card, add a selfie and your name — then watch MRZ reading, face matching, NFC chip verification and AML screening run in real time.</p>
+  <p>Capture a passport or ID card and a selfie live with your camera — then watch MRZ reading, face matching, NFC chip verification and AML screening run in real time.</p>
 </section>
 
 <div class="privacy-note">🔒 <strong>Privacy first:</strong> your images and name are processed in memory on the server and never stored or logged.</div>
@@ -161,23 +182,36 @@
     <div class="step-head">
       <div class="step-num">1</div>
       <div>
-        <h2>Upload your document</h2>
-        <div class="sub">A passport or national ID. Make sure the machine-readable zone at the bottom is clearly visible.</div>
+        <h2>Capture your document</h2>
+        <div class="sub">A passport or national ID, photographed live with your camera. Make sure the machine-readable zone at the bottom is clearly visible.</div>
       </div>
     </div>
-    <div class="drop" id="docDrop">
-      <div class="drop-icon">📄</div>
-      <p><strong>Drop your document here</strong> or <span style="color:var(--accent-light)">browse</span></p>
-      <small>JPG / PNG, up to 10 MB</small>
-      <input type="file" id="docInput" accept="image/*">
-    </div>
-    <div class="preview" id="docPreview">
-      <img id="docPreviewImg" alt="document preview">
-      <div class="meta">
-        <div id="docPreviewName"></div>
-        <small id="docPreviewSize"></small>
+    <div class="cam" id="docCam">
+      <div class="cam-start" id="docStartBox">
+        <div class="cam-icon">🪪</div>
+        <p><strong>Live capture only</strong> — the document is photographed fresh from your camera so the image can't be pre-edited or replayed.</p>
+        <button class="btn btn-primary" id="docStart">📷 Open camera</button>
+        <p class="cam-note" id="docCamError"></p>
       </div>
-      <button class="clear" id="docClear">Remove</button>
+      <div class="cam-stage" id="docStage">
+        <video id="docVideo" autoplay playsinline muted></video>
+        <div class="cam-overlay">
+          <div class="cam-frame doc"></div>
+          <div class="cam-hint" id="docHint">Align your document within the frame</div>
+          <button class="cam-btn" id="docCamBtn" aria-label="Capture document"></button>
+        </div>
+      </div>
+    </div>
+    <div class="capture-preview" id="docCapture">
+      <img id="docCaptureImg" alt="Captured document">
+      <div class="capture-info">
+        <div class="capture-name">Document captured</div>
+        <div class="quality" id="docQuality"></div>
+        <div class="capture-actions">
+          <button class="btn btn-secondary" id="docRetake">↻ Retake</button>
+          <button class="btn btn-primary" id="docContinue">Use this photo →</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -186,23 +220,37 @@
     <div class="step-head">
       <div class="step-num">2</div>
       <div>
-        <h2>Add a selfie <span class="optional">optional</span></h2>
+        <h2>Capture a selfie <span class="optional">optional</span></h2>
         <div class="sub">We'll match the face on your document against your selfie.</div>
       </div>
     </div>
-    <div class="drop" id="selfieDrop">
-      <div class="drop-icon">🤳</div>
-      <p><strong>Drop your selfie here</strong> or <span style="color:var(--accent-light)">browse</span></p>
-      <small>JPG / PNG, up to 10 MB</small>
-      <input type="file" id="selfieInput" accept="image/*">
-    </div>
-    <div class="preview" id="selfiePreview">
-      <img id="selfiePreviewImg" alt="selfie preview">
-      <div class="meta">
-        <div id="selfiePreviewName"></div>
-        <small id="selfiePreviewSize"></small>
+    <div class="cam" id="selfieCam">
+      <div class="cam-start" id="selfieStartBox">
+        <div class="cam-icon">🤳</div>
+        <p><strong>Live capture only</strong> — position your face within the oval.</p>
+        <button class="btn btn-primary" id="selfieStart">📷 Open front camera</button>
+        <a href="#" class="cam-skip" id="selfieSkip">Skip — no face match</a>
+        <p class="cam-note" id="selfieCamError"></p>
       </div>
-      <button class="clear" id="selfieClear">Remove</button>
+      <div class="cam-stage" id="selfieStage">
+        <video id="selfieVideo" autoplay playsinline muted></video>
+        <div class="cam-overlay">
+          <div class="cam-frame selfie"></div>
+          <div class="cam-hint" id="selfieHint">Position your face within the oval</div>
+          <button class="cam-btn" id="selfieCamBtn" aria-label="Capture selfie"></button>
+        </div>
+      </div>
+    </div>
+    <div class="capture-preview" id="selfieCapture">
+      <img id="selfieCaptureImg" alt="Captured selfie">
+      <div class="capture-info">
+        <div class="capture-name">Selfie captured</div>
+        <div class="quality" id="selfieQuality"></div>
+        <div class="capture-actions">
+          <button class="btn btn-secondary" id="selfieRetake">↻ Retake</button>
+          <button class="btn btn-primary" id="selfieContinue">Use this photo →</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -266,7 +314,6 @@
   'use strict';
 
   var API = 'https://api.dev.valydar.com/demo/verify';
-  var MAX = 10 * 1024 * 1024;
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -278,64 +325,235 @@
     nfcCapable: false
   };
 
-  // ── File zones ──
-  function setupDrop(dropId, inputId, previewId, imgId, nameId, sizeId, clearId, setter) {
-    var drop = $(dropId), input = $(inputId), preview = $(previewId),
-        img = $(imgId), nameEl = $(nameId), sizeEl = $(sizeId), clear = $(clearId);
+  // ── Live camera capture ──
+  var cam = { stream: null, timer: null, capturing: false, lastFrame: null, sharpCount: 0 };
 
-    drop.addEventListener('click', function () { input.click(); });
-    drop.addEventListener('dragover', function (e) {
-      e.preventDefault();
-      drop.classList.add('drag');
-    });
-    drop.addEventListener('dragleave', function () { drop.classList.remove('drag'); });
-    drop.addEventListener('drop', function (e) {
-      e.preventDefault();
-      drop.classList.remove('drag');
-      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-    });
-    input.addEventListener('change', function () {
-      if (input.files.length) handleFile(input.files[0]);
-    });
+  var SAMPLE_W = 320, SAMPLE_H = 240;
+  var AUTO_MIN_SHARP = 22, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
+  var SAMPLE = document.createElement('canvas');
+  SAMPLE.width = SAMPLE_W;
+  SAMPLE.height = SAMPLE_H;
+  var SAMPLE_CTX = SAMPLE.getContext('2d');
 
-    function handleFile(file) {
-      if (!file.type.match(/^image\//)) {
-        showError('Please choose an image file (JPG or PNG).');
-        return;
-      }
-      if (file.size > MAX) {
-        showError('That file is larger than 10 MB. Please choose a smaller image.');
-        return;
-      }
-      var reader = new FileReader();
-      reader.onload = function (e) {
-        setter(file);
-        img.src = e.target.result;
-        nameEl.textContent = file.name;
-        sizeEl.textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
-        preview.style.display = 'flex';
-        drop.style.display = 'none';
-        updateRun();
-      };
-      reader.readAsDataURL(file);
+  function toGray(data, w, h) {
+    var out = new Uint8Array(w * h);
+    for (var i = 0; i < w * h; i++) {
+      out[i] = (data[i * 4] * 299 + data[i * 4 + 1] * 587 + data[i * 4 + 2] * 114) / 1000;
     }
+    return out;
+  }
 
-    clear.addEventListener('click', function () {
-      setter(null);
-      input.value = '';
-      preview.style.display = 'none';
-      drop.style.display = '';
-      updateRun();
+  function laplacianVar(gray, w, h) {
+    var sum = 0, sumSq = 0, n = 0;
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        var i = y * w + x;
+        var lap = gray[i - 1] + gray[i + 1] + gray[i - w] + gray[i + w] - 4 * gray[i];
+        sum += lap; sumSq += lap * lap; n++;
+      }
+    }
+    var mean = sum / n;
+    return Math.sqrt(sumSq / n - mean * mean);
+  }
+
+  function brightness(gray) {
+    var s = 0;
+    for (var i = 0; i < gray.length; i++) s += gray[i];
+    return s / gray.length;
+  }
+
+  function frameDiff(a, b) {
+    var n = a.length, sum = 0;
+    for (var i = 0; i < n; i += 8) sum += Math.abs(a[i] - b[i]);
+    return sum / (n / 8);
+  }
+
+  function sampleFrame(video) {
+    SAMPLE_CTX.drawImage(video, 0, 0, SAMPLE_W, SAMPLE_H);
+    return toGray(SAMPLE_CTX.getImageData(0, 0, SAMPLE_W, SAMPLE_H).data, SAMPLE_W, SAMPLE_H);
+  }
+
+  function stopCam() {
+    if (cam.timer) { clearInterval(cam.timer); cam.timer = null; }
+    if (cam.stream) { cam.stream.getTracks().forEach(function (t) { t.stop(); }); cam.stream = null; }
+    cam.lastFrame = null; cam.sharpCount = 0; cam.capturing = false;
+  }
+
+  function camErrorMsg(err) {
+    if (!err) return 'Could not access the camera.';
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')
+      return 'Camera access was denied. Please allow camera access in your browser and reload, then try again.';
+    if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError')
+      return 'No camera was found on this device.';
+    if (err.name === 'NotReadableError')
+      return 'The camera is in use by another application. Close it and try again.';
+    return 'Could not access the camera: ' + err.message;
+  }
+
+  function doCapture(kind, video, onCapture) {
+    if (cam.capturing) return;
+    cam.capturing = true;
+    var canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    stopCam();
+    canvas.toBlob(function (blob) {
+      if (!blob) { cam.capturing = false; return; }
+      assessImage(blob).then(function (q) { onCapture(blob, q); });
+    }, 'image/jpeg', 0.92);
+  }
+
+  function monitor(kind, video, hintEl, onCapture) {
+    if (cam.capturing || video.readyState < 2) return;
+    var gray = sampleFrame(video);
+    var sharp = laplacianVar(gray, SAMPLE_W, SAMPLE_H);
+    var bright = brightness(gray);
+    var diff = cam.lastFrame ? frameDiff(cam.lastFrame, gray) : 999;
+    cam.lastFrame = gray;
+
+    var steady = diff < 3;
+    var ok = sharp > AUTO_MIN_SHARP && bright > MIN_BRIGHT && bright < MAX_BRIGHT && steady;
+    cam.sharpCount = ok ? cam.sharpCount + 1 : 0;
+
+    if (bright <= MIN_BRIGHT) hintEl.textContent = 'Too dark — add some light';
+    else if (bright >= MAX_BRIGHT) hintEl.textContent = 'Too bright — reduce glare';
+    else if (sharp <= AUTO_MIN_SHARP) hintEl.textContent = 'Blurry — steady your hand';
+    else if (!steady) hintEl.textContent = 'Hold steady…';
+    else if (cam.sharpCount < 3) hintEl.textContent = 'Sharp ✓ Hold steady…';
+    else {
+      hintEl.textContent = 'Capturing…';
+      doCapture(kind, video, onCapture);
+      return;
+    }
+    var btn = $(kind === 'selfie' ? 'selfieCamBtn' : 'docCamBtn');
+    if (ok && cam.sharpCount >= 2) btn.classList.add('ready');
+    else btn.classList.remove('ready');
+  }
+
+  function assessImage(blob) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      var url = URL.createObjectURL(blob);
+      img.onload = function () {
+        var w = 320, h = Math.max(1, Math.round(320 * img.height / img.width));
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        var gray = toGray(c.getContext('2d').getImageData(0, 0, w, h).data, w, h);
+        var sharp = laplacianVar(gray, w, h);
+        var bright = brightness(gray);
+        resolve({
+          ok: sharp > 15 && bright > MIN_BRIGHT && bright < MAX_BRIGHT,
+          warn: sharp > 8 && sharp <= 15 && bright > MIN_BRIGHT && bright < MAX_BRIGHT,
+          sharp: Math.round(sharp)
+        });
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        resolve({ ok: true, warn: false, sharp: 0 });
+      };
+      img.src = url;
     });
   }
 
-  setupDrop('docDrop', 'docInput', 'docPreview', 'docPreviewImg',
-    'docPreviewName', 'docPreviewSize', 'docClear',
-    function (f) { state.doc = f; });
-  setupDrop('selfieDrop', 'selfieInput', 'selfiePreview', 'selfiePreviewImg',
-    'selfiePreviewName', 'selfiePreviewSize', 'selfieClear',
-    function (f) { state.selfie = f; });
+  function qualityHTML(q) {
+    if (q.ok) return '<span class="quality ok">✓ Sharp capture</span>';
+    if (q.warn) return '<span class="quality warn">⚠ Slightly blurry — consider retaking</span>';
+    return '<span class="quality fail">✕ Blurry or bad lighting — retake for best results</span>';
+  }
 
+  function startCam(kind, videoId, hintId, btnId, onCapture, onError) {
+    var video = $(videoId);
+    var facing = kind === 'selfie' ? 'user' : 'environment';
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      onError('Camera capture isn\'t supported in this browser. Please use a recent Chrome, Edge, Safari or Firefox.');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    }).then(function (stream) {
+      cam.stream = stream;
+      video.srcObject = stream;
+      var p = video.play();
+      if (p && p.catch) p.catch(function () {});
+      var btn = $(btnId);
+      if (!btn.dataset.wired) {
+        btn.dataset.wired = '1';
+        btn.addEventListener('click', function () {
+          if (cam.capturing) return;
+          doCapture(kind, video, onCapture);
+        });
+      }
+      cam.timer = setInterval(function () {
+        monitor(kind, video, $(hintId), onCapture);
+      }, 400);
+    }).catch(function (err) {
+      onError(camErrorMsg(err));
+    });
+  }
+
+  function wireCapture(prefix, kind, onDone) {
+    var ids = {
+      start: prefix + 'Start', startBox: prefix + 'StartBox', cam: prefix + 'Cam',
+      stage: prefix + 'Stage', video: prefix + 'Video', hint: prefix + 'Hint',
+      camBtn: prefix + 'CamBtn', capture: prefix + 'Capture', img: prefix + 'CaptureImg',
+      quality: prefix + 'Quality', retake: prefix + 'Retake', cont: prefix + 'Continue',
+      err: prefix + 'CamError'
+    };
+    var captured = null;
+
+    function begin() {
+      stopCam();
+      $(ids.startBox).style.display = 'none';
+      $(ids.cam).style.display = '';
+      $(ids.err).style.display = 'none';
+      $(ids.stage).style.display = 'block';
+      startCam(kind, ids.video, ids.hint, ids.camBtn, function (blob, q) {
+        captured = blob;
+        $(ids.img).src = URL.createObjectURL(blob);
+        $(ids.quality).innerHTML = qualityHTML(q);
+        $(ids.capture).style.display = 'flex';
+        $(ids.stage).style.display = 'none';
+        onDone(blob);
+      }, function (msg) {
+        $(ids.stage).style.display = 'none';
+        $(ids.err).textContent = msg;
+        $(ids.err).style.display = '';
+        $(ids.startBox).style.display = '';
+      });
+    }
+
+    $(ids.start).addEventListener('click', begin);
+    $(ids.retake).addEventListener('click', function () {
+      captured = null;
+      $(ids.capture).style.display = 'none';
+      onDone(null);
+      begin();
+    });
+    $(ids.cont).addEventListener('click', function () {
+      if (!captured) return;
+      stopCam();
+      var step = $(prefix === 'doc' ? 'stepDoc' : 'stepSelfie');
+      step.classList.add('done');
+      step.querySelector('.step-num').textContent = '✓';
+      var next = prefix === 'doc' ? 'stepSelfie' : 'stepChip';
+      $(next).scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+
+  wireCapture('doc', 'document', function (blob) { state.doc = blob; updateRun(); });
+  wireCapture('selfie', 'selfie', function (blob) { state.selfie = blob; updateRun(); });
+
+  $('selfieSkip').addEventListener('click', function (e) {
+    e.preventDefault();
+    stopCam();
+    $('stepChip').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // ── Name field ──
   $('nameInput').addEventListener('input', function () {
     state.name = this.value.trim();
     updateRun();
@@ -379,7 +597,7 @@
       updateChipStatus('skipped', 'No readable chip found — browsers can only read NFC tags, not ePassport chips. The chip check is skipped. (Full chip authentication runs in our mobile SDKs.)');
     }, 10000);
     reader.scan().then(function () {
-      reader.onreading = function (event) {
+      reader.onreading = function () {
         clearTimeout(timeout);
         updateChipStatus('unknown', 'NFC tag detected, but ePassports can\'t be read through the browser (WebNFC is NDEF-only). Use the advanced section below or our mobile SDK for full chip verification.');
       };
@@ -422,11 +640,12 @@
   $('runBtn').addEventListener('click', function () {
     var btn = $('runBtn');
     btn.disabled = true;
+    stopCam();
     $('errorBanner').style.display = 'none';
     $('results').style.display = 'none';
     $('wizard').style.display = 'none';
     $('loading').style.display = '';
-    $('loadingText').textContent = 'Running document check &amp; MRZ reading…';
+    $('loadingText').textContent = 'Running document check & MRZ reading…';
 
     var fd = new FormData();
     fd.append('file', state.doc);
