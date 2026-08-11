@@ -340,7 +340,7 @@
   var cam = { stream: null, timer: null, capturing: false, lastFrame: null, countdownStart: null };
 
   var SAMPLE_W = 480, SAMPLE_H = 360;
-  var AUTO_MIN_SHARP = 22, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
+  var AUTO_MIN_SHARP = 22, AUTO_MIN_SHARP_DOC = 35, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
   var FACE_MIN_FRAC = 0.18;
   var COUNTDOWN_SEC = 3;
   var SAMPLE = document.createElement('canvas');
@@ -458,9 +458,9 @@
     if (bright <= MIN_BRIGHT) { resetChecks(); cam.countdownStart = null; hintEl.textContent = 'Too dark — add some light'; return; }
     if (bright >= MAX_BRIGHT) { resetChecks(); cam.countdownStart = null; hintEl.textContent = 'Too bright — reduce glare'; return; }
 
-    var page = pageLikely(gray, SAMPLE_W, SAMPLE_H);
     var mrz = detectMRZ(gray, SAMPLE_W, SAMPLE_H);
-    var sharpOk = sharp > AUTO_MIN_SHARP;
+    var page = passportPage(gray, SAMPLE_W, SAMPLE_H) || mrz;
+    var sharpOk = sharp > AUTO_MIN_SHARP_DOC;
     var ready = mrz && sharpOk && steady;
     if (!ready) cam.countdownStart = null;
 
@@ -512,15 +512,84 @@
     return total ? skin / total : 0;
   }
 
-  function pageLikely(gray, w, h) {
-    var white = 0, dark = 0, n = w * h;
-    for (var i = 0; i < n; i++) {
+  function passportPage(gray, w, h) {
+    var min = 255, max = 0, i;
+    for (i = 0; i < gray.length; i++) {
       var g = gray[i];
-      if (g > 150) white++;
-      else if (g < 100) dark++;
+      if (g < min) min = g;
+      if (g > max) max = g;
     }
-    var wf = white / n, df = dark / n;
-    return wf > 0.25 && wf < 0.95 && df > 0.02 && df < 0.60;
+    if (max - min < 40) return false;
+    var thr = min + (max - min) * 0.60;
+
+    var label = new Int32Array(w * h);
+    var parent = [0];
+    var next = 1;
+    var prevRow = new Int32Array(w);
+    var row = new Int32Array(w);
+    function find(a) {
+      var r = a;
+      while (parent[r] !== r) { parent[r] = parent[parent[r]]; r = parent[r]; }
+      return r;
+    }
+    for (var y = 0; y < h; y++) {
+      var base = y * w;
+      for (var x = 0; x < w; x++) {
+        var on = gray[base + x] >= thr;
+        if (!on) { label[base + x] = 0; row[x] = 0; continue; }
+        var left = x > 0 ? row[x - 1] : 0;
+        var up = y > 0 ? prevRow[x] : 0;
+        if (left && up) {
+          var ra = find(left), rb = find(up);
+          if (ra !== rb) parent[rb] = ra;
+          row[x] = left;
+        } else if (left) row[x] = left;
+        else if (up) row[x] = up;
+        else { row[x] = next; parent[next] = next; next++; }
+        label[base + x] = row[x];
+      }
+      for (var xx = 0; xx < w; xx++) prevRow[xx] = row[xx];
+    }
+
+    var count = new Int32Array(next);
+    var minx = new Int32Array(next), maxx = new Int32Array(next);
+    var miny = new Int32Array(next), maxy = new Int32Array(next);
+    for (i = 0; i < next; i++) { minx[i] = w; maxx[i] = -1; miny[i] = h; maxy[i] = -1; }
+    for (var yy = 0; yy < h; yy++) {
+      for (var xx = 0; xx < w; xx++) {
+        var id = label[yy * w + xx];
+        if (!id) continue;
+        var r = find(id);
+        count[r]++;
+        if (xx < minx[r]) minx[r] = xx;
+        if (xx > maxx[r]) maxx[r] = xx;
+        if (yy < miny[r]) miny[r] = yy;
+        if (yy > maxy[r]) maxy[r] = yy;
+      }
+    }
+
+    var n = w * h;
+    for (var r2 = 1; r2 < next; r2++) {
+      if (!count[r2]) continue;
+      var bw = maxx[r2] - minx[r2] + 1, bh = maxy[r2] - miny[r2] + 1;
+      var aspect = bw / bh;
+      var areaFrac = count[r2] / n;
+      var touches = (minx[r2] === 0 ? 1 : 0) + (maxx[r2] === w - 1 ? 1 : 0) +
+                    (miny[r2] === 0 ? 1 : 0) + (maxy[r2] === h - 1 ? 1 : 0);
+      if (areaFrac < 0.08 || areaFrac > 0.95) continue;
+      if (aspect < 0.95 || aspect > 2.05) continue;
+      if (touches !== 0) continue;
+      var dark = 0, box = 0;
+      for (var yy2 = miny[r2]; yy2 <= maxy[r2]; yy2++) {
+        for (var xx2 = minx[r2]; xx2 <= maxx[r2]; xx2++) {
+          box++;
+          if (gray[yy2 * w + xx2] < 100) dark++;
+        }
+      }
+      if (dark / box < 0.01) continue;
+      return true;
+    }
+    return false;
   }
 
   function detectMRZ(gray, w, h) {
