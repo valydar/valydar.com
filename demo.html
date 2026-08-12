@@ -819,6 +819,11 @@
       (('NDEFReader' in window) || ('nfc' in navigator));
   }
 
+  function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
   function updateChipStatus(cls, text) {
     var el = $('chipStatus');
     el.className = 'chip-status ' + cls;
@@ -831,6 +836,8 @@
       updateChipStatus('capable', 'NFC reader detected. Tap your passport to the back of your phone to read the chip.');
       $('chipScanBtn').style.display = '';
       $('chipScanBtn').addEventListener('click', attemptChipScan);
+    } else if (isIOS()) {
+      updateChipStatus('skipped', 'This iPhone/iPad can\'t read passport chips — Apple doesn\'t allow NFC in browsers (WebNFC is Android-Chrome only), so this step is skipped automatically. Full ePassport chip verification runs in our iOS / mobile SDKs.');
     } else {
       updateChipStatus('skipped', 'This device / browser can\'t read NFC chips — the chip check will be skipped automatically. (Full chip verification is available via our mobile SDKs and desktop readers.)');
     }
