@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Demo — Valydar Identity Verification</title>
-<meta name="description" content="Try Valydar's identity verification live. Capture a document and a selfie with your camera, and see MRZ reading, face matching, AML screening and NFC chip verification in action.">
+<meta name="description" content="Try Valydar's identity verification live. Capture a document and a selfie with your camera, and see MRZ reading, face matching and AML screening in action.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🛡️</text></svg>">
 <style>
@@ -95,22 +95,12 @@
   input[type=text]:focus{border-color:var(--accent)}
   .hint{font-size:12px;color:var(--muted);margin-top:6px}
 
-  /* ── NFC CHIP ── */
-  .chip-status{display:flex;align-items:center;gap:10px;background:var(--bg-alt);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:14px;color:var(--muted)}
-  .chip-status .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-  .chip-status.capable .dot{background:var(--success)}
-  .chip-status.unknown .dot{background:var(--warn)}
-  .chip-status.skipped .dot{background:var(--muted)}
-  .chip-status.failed .dot{background:var(--error)}
-  .chip-actions{margin-top:14px}
-  .chip-scan-btn{display:none}
   details.advanced{margin-top:16px;border:1px solid var(--border);border-radius:8px;background:var(--bg-alt)}
   details.advanced summary{cursor:pointer;padding:12px 16px;font-size:13px;font-weight:600;color:var(--muted);list-style:none}
   details.advanced summary::before{content:'▸ ';color:var(--accent)}
   details.advanced[open] summary::before{content:'▾ '}
   details.advanced .body{padding:0 16px 16px}
   textarea{width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;resize:vertical}
-  .nfc-hint{font-size:12px;color:var(--muted);margin-top:8px}
 
   /* ── BUTTONS ── */
   .btn{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:none;transition:all .2s;font-family:var(--font)}
@@ -173,7 +163,7 @@
 <section class="hero">
   <div class="hero-badge">Live Demo — no account required</div>
   <h1>Experience <em>identity verification</em> in 60 seconds</h1>
-  <p>Capture a passport or ID card and a selfie live with your camera — then watch MRZ reading, face matching, NFC chip verification and AML screening run in real time.</p>
+  <p>Capture a passport or ID card and a selfie live with your camera — then watch MRZ reading, face matching and AML screening run in real time.</p>
 </section>
 
 <div class="privacy-note">🔒 <strong>Privacy first:</strong> your images and name are processed in memory on the server and never stored or logged.</div>
@@ -265,35 +255,10 @@
     </div>
   </div>
 
-  <!-- Step 3: NFC chip -->
-  <div class="step" id="stepChip">
-    <div class="step-head">
-      <div class="step-num">3</div>
-      <div>
-        <h2>NFC chip verification <span class="optional">optional</span></h2>
-        <div class="sub">Passive authentication against the ePassport chip. Runs automatically when the device can read it.</div>
-      </div>
-    </div>
-    <div class="chip-status" id="chipStatus">
-      <span class="dot"></span>
-      <span id="chipStatusText">Checking NFC capability on this device…</span>
-    </div>
-    <div class="chip-actions" id="chipActions">
-      <button class="btn btn-secondary chip-scan-btn" id="chipScanBtn">📡 Scan for chip</button>
-    </div>
-    <details class="advanced">
-      <summary>Advanced — supply chip data from an NFC reader or mobile SDK</summary>
-      <div class="body">
-        <p class="nfc-hint" style="margin-bottom:10px">If you read the chip with an external tool (mobile SDK, desktop reader), paste the JSON payload here to run full passive / active / chip authentication.</p>
-        <textarea id="nfcInput" placeholder='{"mrz_data":{...},"security_object":{...},"chip_info":{...},"data_groups":{...}}'></textarea>
-      </div>
-    </details>
-  </div>
-
-  <!-- Step 4: AML -->
+  <!-- Step 3: AML -->
   <div class="step" id="stepAml">
     <div class="step-head">
-      <div class="step-num">4</div>
+      <div class="step-num">3</div>
       <div>
         <h2>Your full name <span class="optional">optional</span></h2>
         <div class="sub">We'll screen it against sanctions &amp; PEP lists (AML).</div>
@@ -331,9 +296,7 @@
   var state = {
     doc: null,
     selfie: null,
-    name: '',
-    nfc: null,
-    nfcCapable: false
+    name: ''
   };
 
   // ── Live camera capture ──
@@ -793,7 +756,7 @@
       var step = $(prefix === 'doc' ? 'stepDoc' : 'stepSelfie');
       step.classList.add('done');
       step.querySelector('.step-num').textContent = '✓';
-      var next = prefix === 'doc' ? 'stepSelfie' : 'stepChip';
+      var next = prefix === 'doc' ? 'stepSelfie' : 'stepAml';
       $(next).scrollIntoView({ behavior: 'smooth' });
     });
   }
@@ -804,92 +767,12 @@
   $('selfieSkip').addEventListener('click', function (e) {
     e.preventDefault();
     stopCam();
-    $('stepChip').scrollIntoView({ behavior: 'smooth' });
+    $('stepAml').scrollIntoView({ behavior: 'smooth' });
   });
 
   // ── Name field ──
   $('nameInput').addEventListener('input', function () {
     state.name = this.value.trim();
-    updateRun();
-  });
-
-  // ── NFC capability detection ──
-  function nfcSupported() {
-    return typeof window !== 'undefined' &&
-      (('NDEFReader' in window) || ('nfc' in navigator));
-  }
-
-  function isIOS() {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  }
-
-  function updateChipStatus(cls, text) {
-    var el = $('chipStatus');
-    el.className = 'chip-status ' + cls;
-    $('chipStatusText').textContent = text;
-  }
-
-  function initChip() {
-    state.nfcCapable = nfcSupported();
-    if (state.nfcCapable) {
-      updateChipStatus('capable', 'NFC reader detected. Tap your passport to the back of your phone to read the chip.');
-      $('chipScanBtn').style.display = '';
-      $('chipScanBtn').addEventListener('click', attemptChipScan);
-    } else if (isIOS()) {
-      updateChipStatus('skipped', 'This iPhone/iPad can\'t read passport chips — Apple doesn\'t allow NFC in browsers (WebNFC is Android-Chrome only), so this step is skipped automatically. Full ePassport chip verification runs in our iOS / mobile SDKs.');
-    } else {
-      updateChipStatus('skipped', 'This device / browser can\'t read NFC chips — the chip check will be skipped automatically. (Full chip verification is available via our mobile SDKs and desktop readers.)');
-    }
-  }
-
-  function attemptChipScan() {
-    updateChipStatus('unknown', 'Scanning for chip — hold your passport against the back of your phone…');
-    var reader;
-    try {
-      reader = new NDEFReader();
-    } catch (e) {
-      updateChipStatus('failed', 'Could not start an NFC scan on this browser.');
-      return;
-    }
-    var timeout = setTimeout(function () {
-      reader.onreading = null;
-      reader.onreadingerror = null;
-      updateChipStatus('skipped', 'No readable chip found — browsers can only read NFC tags, not ePassport chips. The chip check is skipped. (Full chip authentication runs in our mobile SDKs.)');
-    }, 10000);
-    reader.scan().then(function () {
-      reader.onreading = function () {
-        clearTimeout(timeout);
-        updateChipStatus('unknown', 'NFC tag detected, but ePassports can\'t be read through the browser (WebNFC is NDEF-only). Use the advanced section below or our mobile SDK for full chip verification.');
-      };
-      reader.onreadingerror = function () {
-        clearTimeout(timeout);
-        updateChipStatus('skipped', 'Couldn\'t read a chip — the chip check is skipped. (Full chip authentication runs in our mobile SDKs.)');
-      };
-    }).catch(function (err) {
-      clearTimeout(timeout);
-      if (err && err.name === 'NotAllowedError') {
-        updateChipStatus('skipped', 'NFC permission was denied — the chip check is skipped.');
-      } else {
-        updateChipStatus('skipped', 'NFC scan not available — the chip check is skipped. (Full chip authentication runs in our mobile SDKs.)');
-      }
-    });
-  }
-
-  $('nfcInput').addEventListener('input', function () {
-    var raw = this.value.trim();
-    if (!raw) {
-      state.nfc = null;
-      updateRun();
-      return;
-    }
-    try {
-      state.nfc = JSON.parse(raw);
-      updateChipStatus('capable', 'Chip data loaded — passive / active / chip authentication will run.');
-    } catch (e) {
-      state.nfc = null;
-      updateChipStatus('unknown', 'Pasted NFC data isn\'t valid JSON yet.');
-    }
     updateRun();
   });
 
@@ -915,7 +798,6 @@
       $('loadingText').textContent = 'Matching the face on your document with your selfie…';
     }
     if (state.name) fd.append('full_name', state.name);
-    if (state.nfc) fd.append('nfc', JSON.stringify(state.nfc));
 
     fetch(API, { method: 'POST', body: fd })
       .then(function (res) {
@@ -964,13 +846,11 @@
     var doc = data.document || {};
     var fm = data.face_match;
     var aml = data.aml;
-    var nfc = data.nfc;
     var d = doc.details || {};
 
     var allPassed = doc.passed === true &&
       (!fm || fm.passed === true) &&
-      (!aml || aml.passed === true) &&
-      (!nfc || nfc.passed === true);
+      (!aml || aml.passed === true);
 
     var html = '';
     html += '<div class="verdict ' + (allPassed ? 'pass' : 'fail') + '">';
@@ -1052,30 +932,7 @@
         }).join('') + '</div>';
       }
     } else {
-      html += '<p style="color:var(--muted);font-size:14px">Add your name in step 4 to run sanctions &amp; PEP screening.</p>';
-    }
-    html += '</div>';
-
-    // ── NFC chip ──
-    html += '<div class="result-card">';
-    html += '<h3>📡 NFC chip (ePassport) <span>' + (nfc ? badge(nfc.passed) : badge(null, 'Skipped')) + '</span></h3>';
-    if (nfc) {
-      var pa = nfc.passive_auth || {};
-      html += '<table>';
-      html += '<tr><td>Passive auth</td><td>' + (pa.passed ? 'Passed' : 'Failed') + '</td></tr>';
-      html += '<tr><td>Certificate chain</td><td>' + (pa.certificate_chain_valid ? 'Valid' : 'Invalid') + '</td></tr>';
-      html += '<tr><td>DG hashes</td><td>' + (pa.dg_hashes_match ? 'Match' : 'Mismatch') + '</td></tr>';
-      html += '<tr><td>Verified data groups</td><td>' + esc((pa.verified_data_groups || []).join(', ')) + '</td></tr>';
-      if (nfc.active_auth) html += '<tr><td>Active auth</td><td>' + (nfc.active_auth.passed ? 'Passed' : 'Failed') + '</td></tr>';
-      if (nfc.chip_auth) html += '<tr><td>Chip auth</td><td>' + (nfc.chip_auth.passed ? 'Passed' : 'Failed') + '</td></tr>';
-      html += '</table>';
-      if (pa.errors && pa.errors.length) {
-        html += '<div class="checks">' + pa.errors.map(function (e) {
-          return '<span class="chip no">' + esc(e) + '</span>';
-        }).join('') + '</div>';
-      }
-    } else {
-      html += '<p style="color:var(--muted);font-size:14px">Chip verification was skipped — it runs automatically when the device can read the passport chip (mobile SDKs, desktop readers).</p>';
+      html += '<p style="color:var(--muted);font-size:14px">Add your name in step 3 to run sanctions &amp; PEP screening.</p>';
     }
     html += '</div>';
 
@@ -1095,7 +952,6 @@
       '<pre class="raw-json">' + esc(json) + '</pre></details>';
   }
 
-  initChip();
   updateRun();
 })();
 </script>
