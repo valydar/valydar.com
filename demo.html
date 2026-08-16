@@ -297,7 +297,7 @@
   var cam = { stream: null, timer: null, capturing: false, lastFrame: null, steady: null, countdownStart: null, selfieSharp: false, docSharp: false };
 
   var SAMPLE_W = 480, SAMPLE_H = 360;
-  var AUTO_MIN_SHARP = 18, AUTO_MIN_SHARP_LOW = 10, AUTO_MIN_SHARP_DOC = 28, AUTO_MIN_SHARP_DOC_LOW = 16, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
+  var AUTO_MIN_SHARP = 18, AUTO_MIN_SHARP_LOW = 10, AUTO_MIN_SHARP_DOC = 16, AUTO_MIN_SHARP_DOC_LOW = 8, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
   var STEADY_MAX = 8;
   var FACE_MIN_FRAC = 0.18;
   var COUNTDOWN_SEC = 3;
@@ -435,7 +435,7 @@
 
     if (!page) hintEl.textContent = 'Align your passport within the frame';
     else if (!mrz) hintEl.textContent = sharpOk ? 'Passport found — show the MRZ at the bottom' : 'Passport found — steady your hand';
-    else if (!sharpOk) hintEl.textContent = 'MRZ detected — steady your hand';
+    else if (!sharpOk) hintEl.textContent = 'MRZ detected — steady your hand (sharp ' + Math.round(sharp) + ')';
     else if (!steady) hintEl.textContent = 'Hold steady…';
     else updateCountdown('document', video, hintEl, onCapture);
   }
