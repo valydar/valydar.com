@@ -74,10 +74,6 @@
   .cam-checks{position:absolute;bottom:94px;left:0;right:0;display:flex;gap:8px;justify-content:center}
   .cam-check{font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:3px 10px;background:rgba(0,0,0,.55);transition:color .2s,border-color .2s}
   .cam-check.ok{color:var(--success);border-color:rgba(34,197,94,.55)}
-  .cam-btn{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);width:60px;height:60px;border-radius:50%;border:4px solid #fff;background:rgba(255,255,255,.28);cursor:pointer;pointer-events:auto;padding:0}
-  .cam-btn::after{content:'';position:absolute;inset:5px;border-radius:50%;background:#fff;transition:background .2s}
-  .cam-btn.ready::after{background:var(--success)}
-  .cam-btn:active::after{background:var(--accent)}
 
   /* ── CAPTURE PREVIEW ── */
   .capture-preview{display:none;margin-top:16px;background:var(--bg-alt);border:1px solid var(--border);border-radius:var(--radius);padding:16px;align-items:center;gap:18px;flex-wrap:wrap}
@@ -199,7 +195,6 @@
             <span class="cam-check" id="docCheckMrz">MRZ</span>
             <span class="cam-check" id="docCheckSharp">Sharp</span>
           </div>
-          <button class="cam-btn" id="docCamBtn" aria-label="Capture document"></button>
         </div>
       </div>
     </div>
@@ -238,7 +233,6 @@
         <div class="cam-overlay">
           <div class="cam-frame selfie" id="selfieFrame"></div>
           <div class="cam-hint" id="selfieHint">Position your face within the oval</div>
-          <button class="cam-btn" id="selfieCamBtn" aria-label="Capture selfie"></button>
         </div>
       </div>
     </div>
@@ -300,10 +294,11 @@
   };
 
   // ── Live camera capture ──
-  var cam = { stream: null, timer: null, capturing: false, lastFrame: null, countdownStart: null, selfieSharp: false, docSharp: false };
+  var cam = { stream: null, timer: null, capturing: false, lastFrame: null, steady: null, countdownStart: null, selfieSharp: false, docSharp: false };
 
   var SAMPLE_W = 480, SAMPLE_H = 360;
   var AUTO_MIN_SHARP = 18, AUTO_MIN_SHARP_LOW = 10, AUTO_MIN_SHARP_DOC = 28, AUTO_MIN_SHARP_DOC_LOW = 16, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
+  var STEADY_MAX = 8;
   var FACE_MIN_FRAC = 0.18;
   var COUNTDOWN_SEC = 3;
   var SAMPLE = document.createElement('canvas');
@@ -353,7 +348,7 @@
   function stopCam() {
     if (cam.timer) { clearInterval(cam.timer); cam.timer = null; }
     if (cam.stream) { cam.stream.getTracks().forEach(function (t) { t.stop(); }); cam.stream = null; }
-    cam.lastFrame = null; cam.capturing = false; cam.countdownStart = null;
+    cam.lastFrame = null; cam.steady = null; cam.capturing = false; cam.countdownStart = null;
     cam.selfieSharp = false; cam.docSharp = false;
   }
 
@@ -388,9 +383,12 @@
     var gray = s.gray;
     var sharp = laplacianVar(gray, SAMPLE_W, SAMPLE_H);
     var bright = brightness(gray);
-    var diff = cam.lastFrame ? frameDiff(cam.lastFrame, gray) : 999;
+    var diff = cam.lastFrame ? frameDiff(cam.lastFrame, gray) : null;
     cam.lastFrame = gray;
-    var steady = diff < 3;
+    if (diff !== null) {
+      cam.steady = cam.steady === null ? diff : cam.steady * 0.6 + diff * 0.4;
+    }
+    var steady = cam.steady !== null && cam.steady < STEADY_MAX;
 
     if (kind === 'document') monitorDoc(video, gray, sharp, bright, steady, hintEl, onCapture);
     else monitorSelfie(video, s.rgba, sharp, bright, steady, hintEl, onCapture);
@@ -434,7 +432,6 @@
     setCheck('docCheckMrz', mrz);
     setCheck('docCheckSharp', sharpOk);
     $('docFrame').classList.toggle('ready', ready);
-    $('docCamBtn').classList.toggle('ready', ready);
 
     if (!page) hintEl.textContent = 'Align your passport within the frame';
     else if (!mrz) hintEl.textContent = sharpOk ? 'Passport found — show the MRZ at the bottom' : 'Passport found — steady your hand';
@@ -453,7 +450,6 @@
     if (!ready) cam.countdownStart = null;
 
     $('selfieFrame').classList.toggle('ready', ready);
-    $('selfieCamBtn').classList.toggle('ready', ready);
 
     if (bright <= MIN_BRIGHT) hintEl.textContent = 'Too dark — add some light';
     else if (bright >= MAX_BRIGHT) hintEl.textContent = 'Too bright — reduce glare';
@@ -686,7 +682,7 @@
     return '<span class="quality fail">✕ Blurry or bad lighting — retake for best results</span>';
   }
 
-  function startCam(kind, videoId, hintId, btnId, onCapture, onError) {
+  function startCam(kind, videoId, hintId, onCapture, onError) {
     var video = $(videoId);
     var facing = kind === 'selfie' ? 'user' : 'environment';
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -701,14 +697,6 @@
       video.srcObject = stream;
       var p = video.play();
       if (p && p.catch) p.catch(function () {});
-      var btn = $(btnId);
-      if (!btn.dataset.wired) {
-        btn.dataset.wired = '1';
-        btn.addEventListener('click', function () {
-          if (cam.capturing) return;
-          doCapture(kind, video, onCapture);
-        });
-      }
       cam.timer = setInterval(function () {
         monitor(kind, video, $(hintId), onCapture);
       }, 400);
@@ -721,7 +709,7 @@
     var ids = {
       start: prefix + 'Start', startBox: prefix + 'StartBox', cam: prefix + 'Cam',
       stage: prefix + 'Stage', video: prefix + 'Video', hint: prefix + 'Hint',
-      camBtn: prefix + 'CamBtn', capture: prefix + 'Capture', img: prefix + 'CaptureImg',
+      capture: prefix + 'Capture', img: prefix + 'CaptureImg',
       quality: prefix + 'Quality', retake: prefix + 'Retake', cont: prefix + 'Continue',
       err: prefix + 'CamError'
     };
@@ -733,7 +721,7 @@
       $(ids.cam).style.display = '';
       $(ids.err).style.display = 'none';
       $(ids.stage).style.display = 'block';
-      startCam(kind, ids.video, ids.hint, ids.camBtn, function (blob, q) {
+      startCam(kind, ids.video, ids.hint, function (blob, q) {
         captured = blob;
         $(ids.img).src = URL.createObjectURL(blob);
         $(ids.quality).innerHTML = qualityHTML(q);
