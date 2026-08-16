@@ -559,21 +559,28 @@
   function detectMRZ(gray, w, h) {
     var yTop = Math.floor(h * 0.30);
     var minW = Math.floor(w * 0.06), maxW = Math.floor(w * 0.88);
+    var x0i = Math.floor(w * 0.20), x1i = Math.floor(w * 0.80);
     var textRow = new Uint8Array(h);
     var rowCnt = new Int32Array(h);
     var rowXmin = new Int32Array(h), rowXmax = new Int32Array(h);
+    var sortedRow = new Array(w);
     for (var y = 0; y < h; y++) {
-      var cnt = 0, mn = w, mx = -1, base = y * w;
+      var base = y * w;
+      for (var x = 0; x < w; x++) sortedRow[x] = gray[base + x];
+      sortedRow.sort(function (a, b) { return a - b; });
+      var bg = sortedRow[Math.floor(w * 0.98)] - 30;
+      var cnt = 0, mn = w, mx = -1, inner = 0;
       for (var x = 0; x < w; x++) {
-        if (gray[base + x] < 120) {
+        if (gray[base + x] < bg) {
           cnt++;
           if (x < mn) mn = x;
           if (x > mx) mx = x;
+          if (x >= x0i && x < x1i) inner++;
         }
       }
       rowCnt[y] = cnt;
       rowXmin[y] = mn; rowXmax[y] = mx;
-      textRow[y] = (cnt > minW && cnt < maxW) ? 1 : 0;
+      textRow[y] = (cnt > minW && cnt < maxW && inner > 60) ? 1 : 0;
     }
 
     var bands = [];
@@ -611,9 +618,9 @@
       for (var yy = lo[0]; yy <= lo[1]; yy++) {
         if (rowCnt[yy] > mLo) mLo = rowCnt[yy];
       }
-      if (mUp >= w * 0.60 || mLo >= w * 0.60) return false;
+      if (mUp >= w * 0.85 || mLo >= w * 0.85) return false;
       var sUp = lineSpan(up), sLo = lineSpan(lo);
-      if (sUp < w * 0.32 || sLo < w * 0.32) return false;
+      if (sUp < w * 0.30 || sLo < w * 0.30) return false;
       var sr = sUp > sLo ? sUp / sLo : sLo / sUp;
       return sr < 1.6;
     }
