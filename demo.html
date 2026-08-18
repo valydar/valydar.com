@@ -747,8 +747,7 @@
         $('stepSelfie').style.display = '';
         $('stepSelfie').scrollIntoView({ behavior: 'smooth' });
       } else {
-        $('runRow').style.display = '';
-        $('runBtn').scrollIntoView({ behavior: 'smooth' });
+        runVerification();
       }
     });
   }
@@ -768,7 +767,7 @@
     $('runBtn').disabled = !state.doc;
   }
 
-  $('runBtn').addEventListener('click', function () {
+  function runVerification() {
     var btn = $('runBtn');
     btn.disabled = true;
     stopCam();
@@ -806,7 +805,9 @@
         $('loading').style.display = 'none';
         btn.disabled = false;
       });
-  });
+  }
+
+  $('runBtn').addEventListener('click', runVerification);
 
   function showError(msg) {
     var b = $('errorBanner');
