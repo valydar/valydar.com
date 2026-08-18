@@ -43,8 +43,9 @@
   /* ── WIZARD ── */
   .wizard{max-width:var(--max-w);margin:0 auto 80px;padding:0 24px;display:grid;gap:20px}
   .step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px}
-  .step.done{border-color:rgba(34,197,94,.45)}
+  .step.done{border-color:rgba(34,197,94,.45);padding:20px 28px}
   .step.done .step-num{background:rgba(34,197,94,.15);color:var(--success)}
+  .step.done .cam,.step.done .capture-preview{display:none !important}
   .step-head{display:flex;align-items:center;gap:14px;margin-bottom:20px}
   .step-num{width:32px;height:32px;border-radius:50%;background:rgba(99,102,241,.15);color:var(--accent-light);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
   .step h2{font-size:18px;font-weight:600;color:var(--white)}
