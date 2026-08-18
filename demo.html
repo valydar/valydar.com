@@ -747,7 +747,11 @@
         $('stepSelfie').style.display = '';
         $('stepSelfie').scrollIntoView({ behavior: 'smooth' });
       } else {
-        runVerification();
+        try {
+          runVerification();
+        } catch (err) {
+          showError('Error starting verification: ' + err.message);
+        }
       }
     });
   }
@@ -768,43 +772,47 @@
   }
 
   function runVerification() {
-    var btn = $('runBtn');
-    btn.disabled = true;
-    stopCam();
-    $('errorBanner').style.display = 'none';
-    $('results').style.display = 'none';
-    $('wizard').style.display = 'none';
-    $('loading').style.display = '';
-    $('loadingText').textContent = 'Running document check & MRZ reading…';
+    try {
+      var btn = $('runBtn');
+      btn.disabled = true;
+      stopCam();
+      $('errorBanner').style.display = 'none';
+      $('results').style.display = 'none';
+      $('wizard').style.display = 'none';
+      $('loading').style.display = '';
+      $('loadingText').textContent = 'Running document check & MRZ reading…';
 
-    var fd = new FormData();
-    fd.append('file', state.doc);
-    if (state.selfie) {
-      fd.append('selfie', state.selfie);
-      $('loadingText').textContent = 'Matching the face on your document with your selfie…';
-    }
-    fetch(API, { method: 'POST', body: fd })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          return { ok: res.ok, data: data };
+      var fd = new FormData();
+      fd.append('file', state.doc);
+      if (state.selfie) {
+        fd.append('selfie', state.selfie);
+        $('loadingText').textContent = 'Matching the face on your document with your selfie…';
+      }
+      fetch(API, { method: 'POST', body: fd })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { ok: res.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) {
+            throw new Error((result.data && result.data.error && result.data.error.message) ||
+              'Verification failed — please try again.');
+          }
+          renderResults(result.data);
+        })
+        .catch(function (err) {
+          $('loading').style.display = 'none';
+          $('wizard').style.display = 'grid';
+          showError(err.message || 'Something went wrong. Please try again.');
+        })
+        .finally(function () {
+          $('loading').style.display = 'none';
+          btn.disabled = false;
         });
-      })
-      .then(function (result) {
-        if (!result.ok) {
-          throw new Error((result.data && result.data.error && result.data.error.message) ||
-            'Verification failed — please try again.');
-        }
-        renderResults(result.data);
-      })
-      .catch(function (err) {
-        $('loading').style.display = 'none';
-        $('wizard').style.display = 'grid';
-        showError(err.message || 'Something went wrong. Please try again.');
-      })
-      .finally(function () {
-        $('loading').style.display = 'none';
-        btn.disabled = false;
-      });
+    } catch (err) {
+      showError('Error: ' + err.message);
+    }
   }
 
   $('runBtn').addEventListener('click', runVerification);
