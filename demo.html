@@ -726,7 +726,7 @@
       }, function (msg) {
         $(ids.stage).style.display = 'none';
         $(ids.err).textContent = msg;
-        $(ids.err).style.display = '';
+        $(ids.err).style.display = 'block';
         $(ids.startBox).style.display = '';
       });
     }
@@ -780,7 +780,7 @@
       $('errorBanner').style.display = 'none';
       $('results').style.display = 'none';
       $('wizard').style.display = 'none';
-      $('loading').style.display = '';
+      $('loading').style.display = 'block';
       $('loadingText').textContent = 'Running document check & MRZ reading…';
 
       var fd = new FormData();
@@ -821,7 +821,7 @@
   function showError(msg) {
     var b = $('errorBanner');
     b.textContent = msg;
-    b.style.display = '';
+    b.style.display = 'block';
     b.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
@@ -937,7 +937,7 @@
 
     $('results').innerHTML = html;
     $('loading').style.display = 'none';
-    $('results').style.display = '';
+    $('results').style.display = 'block';
     $('results').scrollIntoView({ behavior: 'smooth' });
   }
 
