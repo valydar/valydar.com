@@ -212,7 +212,7 @@
   </div>
 
   <!-- Step 2: Selfie -->
-  <div class="step" id="stepSelfie">
+  <div class="step" id="stepSelfie" style="display:none">
     <div class="step-head">
       <div class="step-num">2</div>
       <div>
@@ -250,7 +250,7 @@
   </div>
 
   <!-- Step 3: AML -->
-  <div class="run-row">
+  <div class="run-row" id="runRow" style="display:none">
     <button class="btn btn-primary" id="runBtn" disabled>Run verification →</button>
   </div>
 </div>
@@ -743,8 +743,13 @@
       var step = $(prefix === 'doc' ? 'stepDoc' : 'stepSelfie');
       step.classList.add('done');
       step.querySelector('.step-num').textContent = '✓';
-      var next = prefix === 'doc' ? 'stepSelfie' : 'runBtn';
-      $(next).scrollIntoView({ behavior: 'smooth' });
+      if (prefix === 'doc') {
+        $('stepSelfie').style.display = '';
+        $('stepSelfie').scrollIntoView({ behavior: 'smooth' });
+      } else {
+        $('runRow').style.display = '';
+        $('runBtn').scrollIntoView({ behavior: 'smooth' });
+      }
     });
   }
 
@@ -754,6 +759,7 @@
   $('selfieSkip').addEventListener('click', function (e) {
     e.preventDefault();
     stopCam();
+    $('runRow').style.display = '';
     $('runBtn').scrollIntoView({ behavior: 'smooth' });
   });
 
