@@ -250,19 +250,6 @@
   </div>
 
   <!-- Step 3: AML -->
-  <div class="step" id="stepAml">
-    <div class="step-head">
-      <div class="step-num">3</div>
-      <div>
-        <h2>Your full name <span class="optional">optional</span></h2>
-        <div class="sub">We'll screen it against sanctions &amp; PEP lists (AML).</div>
-      </div>
-    </div>
-    <label class="field-label" for="nameInput">Full name as shown on the document</label>
-    <input type="text" id="nameInput" placeholder="e.g. Jane Maria Smith" autocomplete="off">
-    <div class="hint">Only used for this demo run — never stored.</div>
-  </div>
-
   <div class="run-row">
     <button class="btn btn-primary" id="runBtn" disabled>Run verification →</button>
   </div>
@@ -756,7 +743,7 @@
       var step = $(prefix === 'doc' ? 'stepDoc' : 'stepSelfie');
       step.classList.add('done');
       step.querySelector('.step-num').textContent = '✓';
-      var next = prefix === 'doc' ? 'stepSelfie' : 'stepAml';
+      var next = prefix === 'doc' ? 'stepSelfie' : 'runBtn';
       $(next).scrollIntoView({ behavior: 'smooth' });
     });
   }
@@ -767,13 +754,7 @@
   $('selfieSkip').addEventListener('click', function (e) {
     e.preventDefault();
     stopCam();
-    $('stepAml').scrollIntoView({ behavior: 'smooth' });
-  });
-
-  // ── Name field ──
-  $('nameInput').addEventListener('input', function () {
-    state.name = this.value.trim();
-    updateRun();
+    $('runBtn').scrollIntoView({ behavior: 'smooth' });
   });
 
   // ── Run ──
@@ -797,8 +778,6 @@
       fd.append('selfie', state.selfie);
       $('loadingText').textContent = 'Matching the face on your document with your selfie…';
     }
-    if (state.name) fd.append('full_name', state.name);
-
     fetch(API, { method: 'POST', body: fd })
       .then(function (res) {
         return res.json().then(function (data) {
