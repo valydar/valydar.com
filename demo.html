@@ -485,6 +485,11 @@
     var ready = page && edge && color && mrz && sharpOk && steady;
     if (!ready) cam.countdownStart = null;
 
+    if (!cam._ocrLogged) {
+      cam._ocrLogged = true;
+      console.log('[MONITOR] page=' + !!page + ' edge=' + edge + ' color=' + color + ' ocrReady=' + cam.ocrReady + ' ocrMrz=' + cam.ocrMrz + ' ocrFallback=' + cam.ocrFallback);
+    }
+
     setCheck('docCheckDoc', !!page);
     setCheck('docCheckEdge', edge);
     setCheck('docCheckColor', color);
@@ -500,6 +505,8 @@
     else if (!steady) hintEl.textContent = 'Hold steady…';
     else updateCountdown('document', video, hintEl, onCapture);
   }
+
+  var _monitorLog = 0;
 
   function monitorSelfie(video, rgba, sharp, bright, steady, hintEl, onCapture) {
     var face = skinFraction(rgba, SAMPLE_W, SAMPLE_H, 0.20, 0.16, 0.80, 0.86);
@@ -750,18 +757,22 @@
 
   async function initOCR() {
     if (cam.ocrWorker) return;
+    console.log('[OCR] Starting init...');
     try {
       await ensureOCRLoaded();
+      console.log('[OCR] Tesseract.js loaded');
       cam.ocrWorker = await Tesseract.createWorker('eng', 1, {
         logger: function () {}
       });
+      console.log('[OCR] Worker created');
       await cam.ocrWorker.setParameters({
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
         tessedit_pageseg_mode: '6'
       });
       cam.ocrReady = true;
+      console.log('[OCR] Ready');
     } catch (e) {
-      console.warn('OCR init failed:', e);
+      console.warn('[OCR] init failed:', e);
       cam.ocrFallback = true;
     }
   }
@@ -835,8 +846,9 @@
       cam.ocrText = text;
       var mrz = parseMRZText(text);
       cam.ocrMrz = !!mrz;
+      console.log('[OCR] text=' + JSON.stringify(text.substring(0, 200)), 'mrz=' + !!mrz, 'lines=' + (text.split('\n').length));
     } catch (e) {
-      console.warn('OCR error:', e);
+      console.warn('[OCR] error:', e);
     }
     cam.ocrBusy = false;
   }
