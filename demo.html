@@ -193,6 +193,8 @@
           <div class="cam-hint docs" id="docHint">Align your passport within the frame</div>
           <div class="cam-checks">
             <span class="cam-check" id="docCheckDoc">Passport</span>
+            <span class="cam-check" id="docCheckEdge">Edge</span>
+            <span class="cam-check" id="docCheckColor">Color</span>
             <span class="cam-check" id="docCheckMrz">MRZ</span>
             <span class="cam-check" id="docCheckSharp">Sharp</span>
           </div>
@@ -378,7 +380,7 @@
     }
     var steady = cam.steady !== null && cam.steady < STEADY_MAX;
 
-    if (kind === 'document') monitorDoc(video, gray, sharp, bright, steady, hintEl, onCapture);
+    if (kind === 'document') monitorDoc(video, gray, s.rgba, sharp, bright, steady, hintEl, onCapture);
     else monitorSelfie(video, s.rgba, sharp, bright, steady, hintEl, onCapture);
   }
 
@@ -388,6 +390,8 @@
 
   function resetChecks() {
     setCheck('docCheckDoc', false);
+    setCheck('docCheckEdge', false);
+    setCheck('docCheckColor', false);
     setCheck('docCheckMrz', false);
     setCheck('docCheckSharp', false);
   }
@@ -404,26 +408,96 @@
     return false;
   }
 
-  function monitorDoc(video, gray, sharp, bright, steady, hintEl, onCapture) {
+  function passportEdge(gray, w, h) {
+    var minX = w, maxX = -1, minY = h, maxY = -1;
+    var edgeCount = 0;
+    var thr = 40;
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        var i = y * w + x;
+        var gx = -gray[i - w - 1] + gray[i - w + 1]
+                 - 2 * gray[i - 1] + 2 * gray[i + 1]
+                 - gray[i + w - 1] + gray[i + w + 1];
+        var gy = -gray[i - w - 1] - 2 * gray[i - w] - gray[i - w + 1]
+                 + gray[i + w - 1] + 2 * gray[i + w] + gray[i + w + 1];
+        var g = gx * gx + gy * gy;
+        if (g > thr * thr) {
+          edgeCount++;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (edgeCount < 200) return false;
+    var ew = maxX - minX + 1, eh = maxY - minY + 1;
+    var aspect = ew / eh;
+    var areaFrac = (ew * eh) / (w * h);
+    return aspect >= 1.1 && aspect <= 1.7 && areaFrac >= 0.15;
+  }
+
+  function passportColor(rgba, w, h) {
+    var whitePx = 0, darkPx = 0, total = w * h;
+    for (var i = 0; i < total; i++) {
+      var r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2];
+      var lum = r * 0.299 + g * 0.587 + b * 0.114;
+      var sat = Math.max(r, g, b) - Math.min(r, g, b);
+      if (lum > 180 && sat < 60) whitePx++;
+      if (lum < 80) darkPx++;
+    }
+    var whiteFrac = whitePx / total;
+    var darkFrac = darkPx / total;
+    return whiteFrac > 0.20 && darkFrac > 0.03;
+  }
+
+  function mrzInRegion(gray, w, h, pageBounds) {
+    if (!pageBounds) return false;
+    var pb = pageBounds;
+    var yStart = pb.y + Math.floor(pb.h * 0.60);
+    var yEnd = pb.y + pb.h;
+    var x0 = pb.x + Math.floor(pb.w * 0.08);
+    var x1 = pb.x + Math.floor(pb.w * 0.92);
+    var denseRows = 0;
+    for (var y = yStart; y < yEnd; y++) {
+      var dark = 0, cnt = 0;
+      for (var x = x0; x < x1; x++) {
+        cnt++;
+        if (gray[y * w + x] < 120) dark++;
+      }
+      if (cnt > 0 && dark / cnt > 0.35) denseRows++;
+    }
+    return denseRows >= 4;
+  }
+
+  function monitorDoc(video, gray, rgba, sharp, bright, steady, hintEl, onCapture) {
     if (bright <= MIN_BRIGHT) { resetChecks(); cam.countdownStart = null; hintEl.textContent = 'Too dark — add some light'; return; }
     if (bright >= MAX_BRIGHT) { resetChecks(); cam.countdownStart = null; hintEl.textContent = 'Too bright — reduce glare'; return; }
 
-    var mrz = detectMRZ(gray, SAMPLE_W, SAMPLE_H);
     var page = passportPage(gray, SAMPLE_W, SAMPLE_H);
+    var edge = passportEdge(gray, SAMPLE_W, SAMPLE_H);
+    var color = passportColor(rgba, SAMPLE_W, SAMPLE_H);
+    var mrz = detectMRZ(gray, SAMPLE_W, SAMPLE_H);
+    var mrzPos = mrz && page ? mrzInRegion(gray, SAMPLE_W, SAMPLE_H, page) : false;
     if (cam.docSharp) { if (sharp < AUTO_MIN_SHARP_DOC_LOW) cam.docSharp = false; }
     else if (sharp > AUTO_MIN_SHARP_DOC) cam.docSharp = true;
     var sharpOk = cam.docSharp;
-    var ready = page && mrz && sharpOk && steady;
+    var ready = page && edge && color && mrz && mrzPos && sharpOk && steady;
     if (!ready) cam.countdownStart = null;
 
-    setCheck('docCheckDoc', page);
+    setCheck('docCheckDoc', !!page);
+    setCheck('docCheckEdge', edge);
+    setCheck('docCheckColor', color);
     setCheck('docCheckMrz', mrz);
     setCheck('docCheckSharp', sharpOk);
     $('docFrame').classList.toggle('ready', ready);
 
-    if (!page) hintEl.textContent = 'Align your passport within the frame';
-    else if (!mrz) hintEl.textContent = sharpOk ? 'Passport found — show the MRZ at the bottom' : 'Passport found — steady your hand';
-    else if (!sharpOk) hintEl.textContent = 'MRZ detected — steady your hand (sharp ' + Math.round(sharp) + ')';
+    if (!page) hintEl.textContent = 'Align your passport or ID within the frame';
+    else if (!edge) hintEl.textContent = 'Document edges detected — center it more';
+    else if (!color) hintEl.textContent = 'Check the lighting — need contrast';
+    else if (!mrz) hintEl.textContent = 'Show the MRZ lines at the bottom of your document';
+    else if (!mrzPos) hintEl.textContent = 'MRZ should be at the bottom of the document';
+    else if (!sharpOk) hintEl.textContent = 'MRZ detected — steady your hand';
     else if (!steady) hintEl.textContent = 'Hold steady…';
     else updateCountdown('document', video, hintEl, onCapture);
   }
@@ -531,8 +605,8 @@
     var bw = maxx[best] - minx[best] + 1, bh = maxy[best] - miny[best] + 1;
     var aspect = bw / bh;
     var areaFrac = bestArea / n;
-    if (areaFrac < 0.25 || areaFrac > 0.95) return false;
-    if (aspect < 1.0 || aspect > 1.8) return false;
+    if (areaFrac < 0.25 || areaFrac > 0.95) return null;
+    if (aspect < 1.0 || aspect > 1.8) return null;
 
     var dark = 0, box = 0;
     for (var yy2 = miny[best]; yy2 <= maxy[best]; yy2++) {
@@ -541,8 +615,8 @@
         if (gray[yy2 * w + xx2] < 100) dark++;
       }
     }
-    if (dark / box < 0.01) return false;
-    return true;
+    if (dark / box < 0.01) return null;
+    return { x: minx[best], y: miny[best], w: maxx[best] - minx[best] + 1, h: maxy[best] - miny[best] + 1 };
   }
 
   function detectMRZ(gray, w, h) {
