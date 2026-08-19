@@ -476,20 +476,16 @@
 
   async function initOCR() {
     if (cam.ocrWorker) return;
-    console.log('[OCR] Starting init...');
     try {
       await ensureOCRLoaded();
-      console.log('[OCR] Tesseract.js loaded');
       cam.ocrWorker = await Tesseract.createWorker('eng', 1, {
         logger: function () {}
       });
-      console.log('[OCR] Worker created');
       await cam.ocrWorker.setParameters({
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
         tessedit_pageseg_mode: '6'
       });
       cam.ocrReady = true;
-      console.log('[OCR] Ready');
     } catch (e) {
       console.warn('[OCR] init failed:', e);
     }
@@ -571,7 +567,6 @@
       cam.ocrText = text;
       var mrz = parseMRZText(text);
       cam.ocrMrz = !!mrz;
-      console.log('[OCR] text=' + JSON.stringify(text.substring(0, 300)), 'mrz=' + !!mrz, 'lines=' + (text.split('\n').length));
     } catch (e) {
       console.warn('[OCR] error:', e);
     }
