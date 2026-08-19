@@ -592,7 +592,6 @@
   var MOIRE_C = document.createElement('canvas');
   MOIRE_C.width = MOIRE_SIZE; MOIRE_C.height = MOIRE_SIZE;
   var MOIRE_CTX = MOIRE_C.getContext('2d', { willReadFrequently: true });
-  var moirePrevFrame = null;
 
   function detectMoire(video) {
     if (cam.moireBusy) return;
@@ -611,38 +610,22 @@
       var d = img.data;
       var w = MOIRE_SIZE, h = MOIRE_SIZE;
 
-      // ── 1. Color fringing at edges (screen subpixel artifact) ──
-      var fringeHits = 0, edgeCount = 0;
-      for (var y = 1; y < h - 1; y += 2) {
-        for (var x = 2; x < w - 2; x += 2) {
-          var i = (y * w + x) * 4;
-          var dx = Math.abs(d[i - 4] - d[i + 4]);
-          var dy = Math.abs(d[i - w * 4] - d[(y + 1) * w * 4 + x * 4]);
-          if (dx + dy < 40) continue;
-          edgeCount++;
-          var sumL = d[i - 4] + d[i - 3] + d[i - 2] || 1;
-          var sumR = d[i + 4] + d[i + 5] + d[i + 6] || 1;
-          var blueL = d[i - 2] / sumL;
-          var blueR = d[i + 6] / sumR;
-          if (Math.abs(blueL - blueR) > 0.03) fringeHits++;
-        }
-      }
-      var fringeRatio = edgeCount > 10 ? fringeHits / edgeCount : 0;
-
-      // ── 2. Blue light bias in dark regions ──
+      // ── 1. Blue light bias in dark/mid regions ──
+      // Screens emit LED light with blue excess; reflected docs don't
       var blueHits = 0, darkCount = 0;
       for (var y = 0; y < h; y += 2) {
         for (var x = 0; x < w; x += 2) {
           var i = (y * w + x) * 4;
           var bright = (d[i] + d[i + 1] + d[i + 2]) / 3;
-          if (bright > 180 || bright < 20) continue;
+          if (bright > 200 || bright < 15) continue;
           darkCount++;
-          if (d[i + 2] - (d[i] + d[i + 1]) / 2 > 5) blueHits++;
+          if (d[i + 2] - (d[i] + d[i + 1]) / 2 > 8) blueHits++;
         }
       }
       var blueRatio = darkCount > 10 ? blueHits / darkCount : 0;
 
-      // ── 3. Brightness uniformity (screen backlight) ──
+      // ── 2. Brightness uniformity (4×4 tile grid) ──
+      // Screen backlight is very uniform; ambient-lit docs have gradients
       var tileMeans = [];
       for (var ty = 0; ty < 4; ty++) {
         for (var tx = 0; tx < 4; tx++) {
@@ -661,37 +644,44 @@
       var tVar = tileMeans.reduce(function (a, m) { return a + (m - tMean) * (m - tMean); }, 0) / 16;
       var uniformity = Math.sqrt(tVar) / (tMean || 1);
 
-      // ── 4. Temporal flicker (PWM backlight) ──
-      var flickerScore = 0;
-      if (moirePrevFrame) {
-        var flickSum = 0, flickN = 0;
-        for (var y = 0; y < h; y += 4) {
-          for (var x = 0; x < w; x += 4) {
-            var i = (y * w + x) * 4;
-            flickSum += Math.abs(
-              (d[i] + d[i + 1] + d[i + 2]) -
-              (moirePrevFrame[i] + moirePrevFrame[i + 1] + moirePrevFrame[i + 2])
-            );
-            flickN++;
-          }
+      // ── 3. Row periodicity (screen pixel grid → regular row patterns) ──
+      // Sample 16 rows, check autocorrelation at lags 2-30
+      var periodicRows = 0, sampleN = 16;
+      var rowStep = Math.floor(h / sampleN);
+      for (var s = 0; s < sampleN; s++) {
+        var y = s * rowStep;
+        var row = [];
+        for (var x = 0; x < w; x++) {
+          var i = (y * w + x) * 4;
+          row.push((d[i] + d[i + 1] + d[i + 2]) / 3);
         }
-        flickerScore = flickN > 0 ? flickSum / flickN / 3 : 0;
+        var rMean = row.reduce(function (a, b) { return a + b; }) / w;
+        var rVar = row.reduce(function (a, v) { return a + (v - rMean) * (v - rMean); }, 0) / w;
+        if (rVar < 10) continue;
+        var bestCorr = 0;
+        for (var lag = 2; lag <= 30; lag++) {
+          var corr = 0;
+          for (var x = 0; x < w - lag; x++) {
+            corr += (row[x] - rMean) * (row[x + lag] - rMean);
+          }
+          corr /= ((w - lag) * rVar);
+          if (corr > bestCorr) bestCorr = corr;
+        }
+        if (bestCorr > 0.5) periodicRows++;
       }
-      moirePrevFrame = new Uint8Array(d);
+      var periodicity = periodicRows / sampleN;
 
-      // ── Ensemble vote ──
+      // ── Ensemble: require BOTH strong signals ──
       var screenScore = 0;
-      if (fringeRatio > 0.12) screenScore += 0.30;
-      else if (fringeRatio > 0.08) screenScore += 0.15;
-      if (blueRatio > 0.30) screenScore += 0.25;
-      else if (blueRatio > 0.20) screenScore += 0.10;
-      if (uniformity < 0.06) screenScore += 0.20;
-      else if (uniformity < 0.10) screenScore += 0.10;
-      if (flickerScore > 5) screenScore += 0.25;
-      else if (flickerScore > 3) screenScore += 0.10;
+      if (blueRatio > 0.40) screenScore += 0.40;
+      else if (blueRatio > 0.25) screenScore += 0.20;
+      if (uniformity < 0.04) screenScore += 0.30;
+      else if (uniformity < 0.07) screenScore += 0.15;
+      if (periodicity > 0.40) screenScore += 0.30;
+      else if (periodicity > 0.25) screenScore += 0.15;
 
-      cam.moireDetected = screenScore >= 0.55;
-      _log('[Screen] fringe=' + fringeRatio.toFixed(3) + ' blue=' + blueRatio.toFixed(3) + ' uniform=' + uniformity.toFixed(3) + ' flicker=' + flickerScore.toFixed(1) + ' score=' + screenScore.toFixed(2) + ' detected=' + cam.moireDetected);
+      cam.moireDetected = screenScore >= 0.65;
+      _log('[Screen] blue=' + blueRatio.toFixed(3) + ' uniform=' + uniformity.toFixed(3) + ' periodic=' + periodicity.toFixed(3) + ' score=' + screenScore.toFixed(2) + ' detected=' + cam.moireDetected);
     } catch (e) {
       _warn('[Screen] error:', e);
     }
