@@ -284,7 +284,7 @@
   };
 
   // ── Live camera capture ──
-  var cam = { stream: null, timer: null, capturing: false, lastFrame: null, steady: null, countdownStart: null, selfieSharp: false, docSharp: false };
+  var cam = { stream: null, timer: null, capturing: false, lastFrame: null, steady: null, countdownStart: null, selfieSharp: false, docSharp: false, ocrBusy: false, ocrLastRun: 0, ocrWorker: null, ocrReady: false, ocrMrz: false, ocrText: '' };
 
   var SAMPLE_W = 480, SAMPLE_H = 360;
   var AUTO_MIN_SHARP = 18, AUTO_MIN_SHARP_LOW = 10, AUTO_MIN_SHARP_DOC = 16, AUTO_MIN_SHARP_DOC_LOW = 8, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
@@ -339,7 +339,7 @@
     if (cam.timer) { clearInterval(cam.timer); cam.timer = null; }
     if (cam.stream) { cam.stream.getTracks().forEach(function (t) { t.stop(); }); cam.stream = null; }
     cam.lastFrame = null; cam.steady = null; cam.capturing = false; cam.countdownStart = null;
-    cam.selfieSharp = false; cam.docSharp = false;
+    cam.selfieSharp = false; cam.docSharp = false; cam.ocrMrz = false; cam.ocrText = '';
   }
 
   function camErrorMsg(err) {
@@ -477,12 +477,12 @@
     var page = passportPage(gray, SAMPLE_W, SAMPLE_H);
     var edge = passportEdge(gray, SAMPLE_W, SAMPLE_H);
     var color = passportColor(rgba, SAMPLE_W, SAMPLE_H);
-    var mrz = detectMRZ(gray, SAMPLE_W, SAMPLE_H);
-    var mrzPos = mrz && page ? mrzInRegion(gray, SAMPLE_W, SAMPLE_H, page) : false;
+    var mrz = cam.ocrMrz || (cam.ocrFallback && detectMRZ(gray, SAMPLE_W, SAMPLE_H));
+    runOCRFrame(video, page);
     if (cam.docSharp) { if (sharp < AUTO_MIN_SHARP_DOC_LOW) cam.docSharp = false; }
     else if (sharp > AUTO_MIN_SHARP_DOC) cam.docSharp = true;
     var sharpOk = cam.docSharp;
-    var ready = page && edge && color && mrz && mrzPos && sharpOk && steady;
+    var ready = page && edge && color && mrz && sharpOk && steady;
     if (!ready) cam.countdownStart = null;
 
     setCheck('docCheckDoc', !!page);
@@ -495,8 +495,7 @@
     if (!page) hintEl.textContent = 'Align your passport or ID within the frame';
     else if (!edge) hintEl.textContent = 'Document edges detected — center it more';
     else if (!color) hintEl.textContent = 'Check the lighting — need contrast';
-    else if (!mrz) hintEl.textContent = 'Show the MRZ lines at the bottom of your document';
-    else if (!mrzPos) hintEl.textContent = 'MRZ should be at the bottom of the document';
+    else if (!mrz) hintEl.textContent = cam.ocrReady ? 'Scanning for MRZ text…' : 'Loading OCR engine…';
     else if (!sharpOk) hintEl.textContent = 'MRZ detected — steady your hand';
     else if (!steady) hintEl.textContent = 'Hold steady…';
     else updateCountdown('document', video, hintEl, onCapture);
@@ -734,6 +733,114 @@
     return false;
   }
 
+  // ── OCR-based MRZ detection ──
+  var OCR_INTERVAL = 2500;
+  var OCR_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+
+  function ensureOCRLoaded() {
+    if (typeof Tesseract !== 'undefined') return Promise.resolve();
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = OCR_CDN;
+      s.onload = resolve;
+      s.onerror = function () { reject(new Error('Failed to load Tesseract.js')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  async function initOCR() {
+    if (cam.ocrWorker) return;
+    try {
+      await ensureOCRLoaded();
+      cam.ocrWorker = await Tesseract.createWorker('eng', 1, {
+        logger: function () {}
+      });
+      await cam.ocrWorker.setParameters({
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
+        tessedit_pageseg_mode: '6'
+      });
+      cam.ocrReady = true;
+    } catch (e) {
+      console.warn('OCR init failed:', e);
+      cam.ocrFallback = true;
+    }
+  }
+
+  function parseMRZLine(line) {
+    var clean = line.replace(/[^A-Z0-9<]/g, '');
+    if (clean.length >= 30 && clean.length <= 44) return clean;
+    return null;
+  }
+
+  function validateMRZTD3(lines) {
+    if (lines.length < 2) return false;
+    var l1 = lines[0], l2 = lines[1];
+    if (l1.length < 42 || l1.length > 44) return false;
+    if (l2.length < 42 || l2.length > 44) return false;
+    if (l1[0] !== 'P') return false;
+    return true;
+  }
+
+  function validateMRZTD1(lines) {
+    if (lines.length < 3) return false;
+    for (var i = 0; i < 3; i++) {
+      if (lines[i].length < 28 || lines[i].length > 30) return false;
+    }
+    return true;
+  }
+
+  function parseMRZText(text) {
+    var rawLines = text.split('\n');
+    var mrzLines = [];
+    for (var i = 0; i < rawLines.length; i++) {
+      var parsed = parseMRZLine(rawLines[i]);
+      if (parsed) mrzLines.push(parsed);
+    }
+    if (mrzLines.length >= 2 && validateMRZTD3(mrzLines.slice(0, 2))) {
+      return { format: 'TD3', lines: mrzLines.slice(0, 2) };
+    }
+    if (mrzLines.length >= 3 && validateMRZTD1(mrzLines.slice(0, 3))) {
+      return { format: 'TD1', lines: mrzLines.slice(0, 3) };
+    }
+    return null;
+  }
+
+  async function runOCRFrame(video, pageBounds) {
+    if (cam.ocrBusy || !cam.ocrReady || !cam.ocrWorker) return;
+    var now = Date.now();
+    if (now - cam.ocrLastRun < OCR_INTERVAL) return;
+    cam.ocrBusy = true;
+    cam.ocrLastRun = now;
+    try {
+      var vw = video.videoWidth || 1280;
+      var vh = video.videoHeight || 720;
+      var sx, sy, sw, sh;
+      if (pageBounds) {
+        sx = Math.floor(pageBounds.x / SAMPLE_W * vw);
+        sy = Math.floor((pageBounds.y + pageBounds.h * 0.55) / SAMPLE_H * vh);
+        sw = Math.floor(pageBounds.w / SAMPLE_W * vw);
+        sh = Math.floor(pageBounds.h * 0.45 / SAMPLE_H * vh);
+      } else {
+        sx = 0; sy = Math.floor(vh * 0.55);
+        sw = vw; sh = Math.floor(vh * 0.45);
+      }
+      sx = Math.max(0, sx); sy = Math.max(0, sy);
+      sw = Math.min(sw, vw - sx); sh = Math.min(sh, vh - sy);
+      var c = document.createElement('canvas');
+      c.width = sw; c.height = sh;
+      var ctx = c.getContext('2d');
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+      var result = await cam.ocrWorker.recognize(c);
+      var text = result.data.text || '';
+      cam.ocrText = text;
+      var mrz = parseMRZText(text);
+      cam.ocrMrz = !!mrz;
+    } catch (e) {
+      console.warn('OCR error:', e);
+    }
+    cam.ocrBusy = false;
+  }
+
   function assessImage(blob) {
     return new Promise(function (resolve) {
       var img = new Image();
@@ -782,6 +889,7 @@
       video.srcObject = stream;
       var p = video.play();
       if (p && p.catch) p.catch(function () {});
+      if (kind === 'document') initOCR();
       cam.timer = setInterval(function () {
         monitor(kind, video, $(hintId), onCapture);
       }, 400);
