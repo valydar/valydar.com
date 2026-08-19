@@ -620,8 +620,8 @@
   }
 
   function detectMRZ(gray, w, h) {
-    var yTop = Math.floor(h * 0.50);
-    var yBot = Math.floor(h * 0.65);
+    var yTop = Math.floor(h * 0.35);
+    var yBot = Math.floor(h * 0.75);
     var minW = Math.floor(w * 0.06), maxW = Math.floor(w * 0.88);
     var x0i = Math.floor(w * 0.20), x1i = Math.floor(w * 0.80);
     var textRow = new Uint8Array(h);
@@ -654,7 +654,7 @@
       textRow[y] = (cnt > minW && cnt < maxW && inner > 80) ? 1 : 0;
 
       if (y >= yBot && textRow[y]) {
-        if (y - prevDense > 4) botBands++;
+        if (y - prevDense > 10) botBands++;
         prevDense = y;
       }
     }
@@ -669,7 +669,7 @@
         else gap = 0;
       } else if (inBand) {
         gap++;
-        if (gap > 2) { bands.push([bandStart, y - gap]); inBand = false; }
+        if (gap > 5) { bands.push([bandStart, y - gap]); inBand = false; }
       }
     }
     if (inBand) bands.push([bandStart, h - 1]);
