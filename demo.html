@@ -586,43 +586,15 @@
     cam.ocrBusy = false;
   }
 
-  // ── Moiré / presentation-attack detection (FFT) ──
+  // ── Presentation-attack detection (screen replay) ──
   var MOIRE_INTERVAL = 3000;
   var MOIRE_SIZE = 256;
   var MOIRE_C = document.createElement('canvas');
   MOIRE_C.width = MOIRE_SIZE; MOIRE_C.height = MOIRE_SIZE;
   var MOIRE_CTX = MOIRE_C.getContext('2d', { willReadFrequently: true });
+  var moirePrevFrame = null;
 
-  function fft1d(re, im, n, off) {
-    off = off || 0;
-    var j = 0, i, k, tmp;
-    for (i = 0; i < n; i++) {
-      if (i < j) { tmp = re[off + i]; re[off + i] = re[off + j]; re[off + j] = tmp; tmp = im[off + i]; im[off + i] = im[off + j]; im[off + j] = tmp; }
-      var m = n >> 1;
-      while (m >= 1 && j >= m) { j -= m; m >>= 1; }
-      j += m;
-    }
-    var ang, wr, wi, tr, ti, half = 1;
-    while (half < n) {
-      ang = -Math.PI / half;
-      wr = Math.cos(ang); wi = Math.sin(ang);
-      for (i = 0; i < n; i += half * 2) {
-        var ck = 1, sk = 0;
-        for (k = 0; k < half; k++) {
-          var u = off + i + k, v = u + half;
-          tr = re[v] * ck - im[v] * sk;
-          ti = re[v] * sk + im[v] * ck;
-          re[v] = re[u] - tr; im[v] = im[u] - ti;
-          re[u] += tr; im[u] += ti;
-          var nsk = sk * wr + ck * wi;
-          ck = ck * wr - sk * wi; sk = nsk;
-        }
-      }
-      half <<= 1;
-    }
-  }
-
-  async function detectMoire(video) {
+  function detectMoire(video) {
     if (cam.moireBusy) return;
     var now = Date.now();
     if (now - cam.moireLastRun < MOIRE_INTERVAL) return;
@@ -637,62 +609,91 @@
       MOIRE_CTX.drawImage(video, sx, sy, sq, sq, 0, 0, MOIRE_SIZE, MOIRE_SIZE);
       var img = MOIRE_CTX.getImageData(0, 0, MOIRE_SIZE, MOIRE_SIZE);
       var d = img.data;
-      var gray = new Float64Array(MOIRE_SIZE * MOIRE_SIZE);
-      var win = new Float64Array(MOIRE_SIZE);
-      for (var i = 0; i < MOIRE_SIZE; i++) win[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (MOIRE_SIZE - 1)));
-      for (var y = 0; y < MOIRE_SIZE; y++) {
-        for (var x = 0; x < MOIRE_SIZE; x++) {
-          var idx = (y * MOIRE_SIZE + x) * 4;
-          var g = (d[idx] * 299 + d[idx + 1] * 587 + d[idx + 2] * 114) / 1000;
-          gray[y * MOIRE_SIZE + x] = g * win[x] * win[y];
+      var w = MOIRE_SIZE, h = MOIRE_SIZE;
+
+      // ── 1. Color fringing at edges (screen subpixel artifact) ──
+      var fringeHits = 0, edgeCount = 0;
+      for (var y = 1; y < h - 1; y += 2) {
+        for (var x = 2; x < w - 2; x += 2) {
+          var i = (y * w + x) * 4;
+          var dx = Math.abs(d[i - 4] - d[i + 4]);
+          var dy = Math.abs(d[i - w * 4] - d[(y + 1) * w * 4 + x * 4]);
+          if (dx + dy < 40) continue;
+          edgeCount++;
+          var sumL = d[i - 4] + d[i - 3] + d[i - 2] || 1;
+          var sumR = d[i + 4] + d[i + 5] + d[i + 6] || 1;
+          var blueL = d[i - 2] / sumL;
+          var blueR = d[i + 6] / sumR;
+          if (Math.abs(blueL - blueR) > 0.03) fringeHits++;
         }
       }
-      var re = new Float64Array(MOIRE_SIZE * MOIRE_SIZE);
-      var im = new Float64Array(MOIRE_SIZE * MOIRE_SIZE);
-      for (var i = 0; i < MOIRE_SIZE * MOIRE_SIZE; i++) re[i] = gray[i];
-      for (var y = 0; y < MOIRE_SIZE; y++) fft1d(re, im, MOIRE_SIZE, y * MOIRE_SIZE);
-      for (var x = 0; x < MOIRE_SIZE; x++) {
-        var colRe = new Float64Array(MOIRE_SIZE);
-        var colIm = new Float64Array(MOIRE_SIZE);
-        for (var y = 0; y < MOIRE_SIZE; y++) { colRe[y] = re[y * MOIRE_SIZE + x]; colIm[y] = im[y * MOIRE_SIZE + x]; }
-        fft1d(colRe, colIm, MOIRE_SIZE);
-        for (var y = 0; y < MOIRE_SIZE; y++) { re[y * MOIRE_SIZE + x] = colRe[y]; im[y * MOIRE_SIZE + x] = colIm[y]; }
-      }
-      var halfN = MOIRE_SIZE / 2;
-      var sum = 0, count = 0;
-      var mag = new Float64Array(halfN * halfN);
-      for (var fy = 1; fy < halfN; fy++) {
-        for (var fx = 1; fx < halfN; fx++) {
-          var m = Math.sqrt(re[fy * MOIRE_SIZE + fx] * re[fy * MOIRE_SIZE + fx] + im[fy * MOIRE_SIZE + fx] * im[fy * MOIRE_SIZE + fx]);
-          mag[fy * halfN + fx] = m;
-          sum += m; count++;
+      var fringeRatio = edgeCount > 10 ? fringeHits / edgeCount : 0;
+
+      // ── 2. Blue light bias in dark regions ──
+      var blueHits = 0, darkCount = 0;
+      for (var y = 0; y < h; y += 2) {
+        for (var x = 0; x < w; x += 2) {
+          var i = (y * w + x) * 4;
+          var bright = (d[i] + d[i + 1] + d[i + 2]) / 3;
+          if (bright > 180 || bright < 20) continue;
+          darkCount++;
+          if (d[i + 2] - (d[i] + d[i + 1]) / 2 > 5) blueHits++;
         }
       }
-      var sorted = Array.from(mag).filter(function (v) { return v > 0; }).sort(function (a, b) { return a - b; });
-      var median = sorted[Math.floor(sorted.length * 0.5)] || 1;
-      var maxPeak = sorted[sorted.length - 1] || 0;
-      var ratio = maxPeak / median;
-      var strong = 0;
-      for (var i = 0; i < sorted.length; i++) { if (sorted[i] > median * 10) strong++; }
-      var avg = sum / count;
-      var lowBand = 0, lowCount = 0, midBand = 0, midCount = 0;
-      var rMin = Math.floor(halfN * 0.08), rMax = Math.floor(halfN * 0.70);
-      var rMid1 = Math.floor(halfN * 0.15), rMid2 = Math.floor(halfN * 0.65);
-      for (var fy = 1; fy < halfN; fy++) {
-        for (var fx = 1; fx < halfN; fx++) {
-          var r = Math.sqrt(fy * fy + fx * fx);
-          if (r >= rMin && r < rMax) {
-            lowBand += mag[fy * halfN + fx]; lowCount++;
-            if (r >= rMid1 && r < rMid2) { midBand += mag[fy * halfN + fx]; midCount++; }
+      var blueRatio = darkCount > 10 ? blueHits / darkCount : 0;
+
+      // ── 3. Brightness uniformity (screen backlight) ──
+      var tileMeans = [];
+      for (var ty = 0; ty < 4; ty++) {
+        for (var tx = 0; tx < 4; tx++) {
+          var sum = 0, cnt = 0;
+          for (var y = ty * 64; y < (ty + 1) * 64; y++) {
+            for (var x = tx * 64; x < (tx + 1) * 64; x++) {
+              var i = (y * w + x) * 4;
+              sum += (d[i] + d[i + 1] + d[i + 2]) / 3;
+              cnt++;
+            }
+          }
+          tileMeans.push(sum / cnt);
+        }
+      }
+      var tMean = tileMeans.reduce(function (a, b) { return a + b; }) / 16;
+      var tVar = tileMeans.reduce(function (a, m) { return a + (m - tMean) * (m - tMean); }, 0) / 16;
+      var uniformity = Math.sqrt(tVar) / (tMean || 1);
+
+      // ── 4. Temporal flicker (PWM backlight) ──
+      var flickerScore = 0;
+      if (moirePrevFrame) {
+        var flickSum = 0, flickN = 0;
+        for (var y = 0; y < h; y += 4) {
+          for (var x = 0; x < w; x += 4) {
+            var i = (y * w + x) * 4;
+            flickSum += Math.abs(
+              (d[i] + d[i + 1] + d[i + 2]) -
+              (moirePrevFrame[i] + moirePrevFrame[i + 1] + moirePrevFrame[i + 2])
+            );
+            flickN++;
           }
         }
+        flickerScore = flickN > 0 ? flickSum / flickN / 3 : 0;
       }
-      var lowAvg = lowCount ? lowBand / lowCount : 0;
-      var midAvg = midCount ? midBand / midCount : 0;
-      cam.moireDetected = ratio > 6.0 && strong > 30 && avg > 40 && midAvg > lowAvg * 0.85;
-      _log('[Moire] ratio=' + ratio.toFixed(1) + ' strong=' + strong + ' avg=' + avg.toFixed(1) + ' midAvg=' + midAvg.toFixed(1) + ' lowAvg=' + lowAvg.toFixed(1) + ' detected=' + cam.moireDetected);
+      moirePrevFrame = new Uint8Array(d);
+
+      // ── Ensemble vote ──
+      var screenScore = 0;
+      if (fringeRatio > 0.12) screenScore += 0.30;
+      else if (fringeRatio > 0.08) screenScore += 0.15;
+      if (blueRatio > 0.30) screenScore += 0.25;
+      else if (blueRatio > 0.20) screenScore += 0.10;
+      if (uniformity < 0.06) screenScore += 0.20;
+      else if (uniformity < 0.10) screenScore += 0.10;
+      if (flickerScore > 5) screenScore += 0.25;
+      else if (flickerScore > 3) screenScore += 0.10;
+
+      cam.moireDetected = screenScore >= 0.55;
+      _log('[Screen] fringe=' + fringeRatio.toFixed(3) + ' blue=' + blueRatio.toFixed(3) + ' uniform=' + uniformity.toFixed(3) + ' flicker=' + flickerScore.toFixed(1) + ' score=' + screenScore.toFixed(2) + ' detected=' + cam.moireDetected);
     } catch (e) {
-      _warn('[Moire] error:', e);
+      _warn('[Screen] error:', e);
     }
     cam.moireBusy = false;
   }
