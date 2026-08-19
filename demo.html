@@ -409,11 +409,11 @@
     if (bright >= MAX_BRIGHT) { resetChecks(); cam.countdownStart = null; hintEl.textContent = 'Too bright — reduce glare'; return; }
 
     var mrz = detectMRZ(gray, SAMPLE_W, SAMPLE_H);
-    var page = passportPage(gray, SAMPLE_W, SAMPLE_H) || mrz;
+    var page = passportPage(gray, SAMPLE_W, SAMPLE_H);
     if (cam.docSharp) { if (sharp < AUTO_MIN_SHARP_DOC_LOW) cam.docSharp = false; }
     else if (sharp > AUTO_MIN_SHARP_DOC) cam.docSharp = true;
     var sharpOk = cam.docSharp;
-    var ready = mrz && sharpOk && steady;
+    var ready = page && mrz && sharpOk && steady;
     if (!ready) cam.countdownStart = null;
 
     setCheck('docCheckDoc', page);
@@ -472,7 +472,8 @@
       if (g > max) max = g;
     }
     if (max - min < 40) return false;
-    var thr = min + (max - min) * 0.60;
+    var range = max - min;
+    var thr = min + range * 0.35;
 
     var label = new Int32Array(w * h);
     var parent = [0];
@@ -521,37 +522,45 @@
     }
 
     var n = w * h;
+    var best = 0, bestArea = 0;
     for (var r2 = 1; r2 < next; r2++) {
-      if (!count[r2]) continue;
-      var bw = maxx[r2] - minx[r2] + 1, bh = maxy[r2] - miny[r2] + 1;
-      var aspect = bw / bh;
-      var areaFrac = count[r2] / n;
-      var touches = (minx[r2] === 0 ? 1 : 0) + (maxx[r2] === w - 1 ? 1 : 0) +
-                    (miny[r2] === 0 ? 1 : 0) + (maxy[r2] === h - 1 ? 1 : 0);
-      if (areaFrac < 0.08 || areaFrac > 0.95) continue;
-      if (aspect < 0.95 || aspect > 2.05) continue;
-      if (touches !== 0) continue;
-      var dark = 0, box = 0;
-      for (var yy2 = miny[r2]; yy2 <= maxy[r2]; yy2++) {
-        for (var xx2 = minx[r2]; xx2 <= maxx[r2]; xx2++) {
-          box++;
-          if (gray[yy2 * w + xx2] < 100) dark++;
-        }
-      }
-      if (dark / box < 0.01) continue;
-      return true;
+      if (count[r2] > bestArea) { bestArea = count[r2]; best = r2; }
     }
-    return false;
+    if (!best) return false;
+
+    var bw = maxx[best] - minx[best] + 1, bh = maxy[best] - miny[best] + 1;
+    var aspect = bw / bh;
+    var areaFrac = bestArea / n;
+    if (areaFrac < 0.25 || areaFrac > 0.95) return false;
+    if (aspect < 1.0 || aspect > 1.8) return false;
+
+    var dark = 0, box = 0;
+    for (var yy2 = miny[best]; yy2 <= maxy[best]; yy2++) {
+      for (var xx2 = minx[best]; xx2 <= maxx[best]; xx2++) {
+        box++;
+        if (gray[yy2 * w + xx2] < 100) dark++;
+      }
+    }
+    if (dark / box < 0.01) return false;
+    return true;
   }
 
   function detectMRZ(gray, w, h) {
-    var yTop = Math.floor(h * 0.30);
+    var yTop = Math.floor(h * 0.50);
+    var yBot = Math.floor(h * 0.65);
     var minW = Math.floor(w * 0.06), maxW = Math.floor(w * 0.88);
     var x0i = Math.floor(w * 0.20), x1i = Math.floor(w * 0.80);
     var textRow = new Uint8Array(h);
     var rowCnt = new Int32Array(h);
     var rowXmin = new Int32Array(h), rowXmax = new Int32Array(h);
     var sortedRow = new Array(w);
+
+    var denseCount = 0;
+    var prevDense = -10;
+    var botBands = 0;
+    var inBotBand = false;
+    var botBandStart = 0;
+
     for (var y = 0; y < h; y++) {
       var base = y * w;
       for (var x = 0; x < w; x++) sortedRow[x] = gray[base + x];
@@ -568,8 +577,15 @@
       }
       rowCnt[y] = cnt;
       rowXmin[y] = mn; rowXmax[y] = mx;
-      textRow[y] = (cnt > minW && cnt < maxW && inner > 60) ? 1 : 0;
+      textRow[y] = (cnt > minW && cnt < maxW && inner > 80) ? 1 : 0;
+
+      if (y >= yBot && textRow[y]) {
+        if (y - prevDense > 4) botBands++;
+        prevDense = y;
+      }
     }
+
+    if (botBands !== 2) return false;
 
     var bands = [];
     var inBand = false, bandStart = 0, gap = 0;
@@ -598,7 +614,7 @@
       var hUp = up[1] - up[0] + 1, hLo = lo[1] - lo[0] + 1;
       if (hUp < 3 || hLo < 3) return false;
       var hr = hUp > hLo ? hUp / hLo : hLo / hUp;
-      if (hr >= 2.5) return false;
+      if (hr >= 2.0) return false;
       var mUp = 0, mLo = 0;
       for (var yy = up[0]; yy <= up[1]; yy++) {
         if (rowCnt[yy] > mUp) mUp = rowCnt[yy];
@@ -608,9 +624,9 @@
       }
       if (mUp >= w * 0.85 || mLo >= w * 0.85) return false;
       var sUp = lineSpan(up), sLo = lineSpan(lo);
-      if (sUp < w * 0.30 || sLo < w * 0.30) return false;
+      if (sUp < w * 0.40 || sLo < w * 0.40) return false;
       var sr = sUp > sLo ? sUp / sLo : sLo / sUp;
-      return sr < 1.6;
+      return sr < 1.4;
     }
 
     for (var i = bands.length - 1; i >= 0; i--) {
@@ -634,8 +650,8 @@
         var above = bands[i - 1];
         var gapBetween = b[0] - above[1] - 1;
         var hb = b[1] - b[0] + 1, ha = above[1] - above[0] + 1;
-        if (hb <= h * 0.12 && ha <= h * 0.12 &&
-            gapBetween <= Math.max(8, Math.round(Math.min(ha, hb) * 2)) &&
+        if (hb <= h * 0.10 && ha <= h * 0.10 &&
+            gapBetween <= Math.max(5, Math.round(Math.min(ha, hb) * 1.5)) &&
             linesOk(above, b)) {
           return true;
         }
