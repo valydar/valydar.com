@@ -193,6 +193,7 @@
           <div class="cam-hint docs" id="docHint">Align your passport within the frame</div>
           <div class="cam-checks">
             <span class="cam-check" id="docCheckMrz">MRZ</span>
+            <span class="cam-check" id="docCheckScreen">Screen</span>
             <span class="cam-check" id="docCheckSharp">Sharp</span>
           </div>
         </div>
@@ -272,6 +273,10 @@
 
   var API = 'https://api.dev.valydar.com/demo/verify';
 
+  var DEBUG = location.hostname.indexOf('dev') !== -1;
+  var _log = DEBUG ? console.log.bind(console) : function () {};
+  var _warn = DEBUG ? console.warn.bind(console) : function () {};
+
   var $ = function (id) { return document.getElementById(id); };
 
   var state = {
@@ -281,7 +286,7 @@
   };
 
   // ── Live camera capture ──
-  var cam = { stream: null, timer: null, capturing: false, lastFrame: null, steady: null, countdownStart: null, selfieSharp: false, docSharp: false, ocrBusy: false, ocrLastRun: 0, ocrWorker: null, ocrReady: false, ocrMrz: false, ocrText: '' };
+  var cam = { stream: null, timer: null, capturing: false, lastFrame: null, steady: null, countdownStart: null, selfieSharp: false, docSharp: false, ocrBusy: false, ocrLastRun: 0, ocrWorker: null, ocrReady: false, ocrMrz: false, ocrText: '', moireBusy: false, moireLastRun: 0, moireDetected: false };
 
   var SAMPLE_W = 480, SAMPLE_H = 360;
   var AUTO_MIN_SHARP = 18, AUTO_MIN_SHARP_LOW = 10, AUTO_MIN_SHARP_DOC = 16, AUTO_MIN_SHARP_DOC_LOW = 8, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
@@ -336,7 +341,7 @@
     if (cam.timer) { clearInterval(cam.timer); cam.timer = null; }
     if (cam.stream) { cam.stream.getTracks().forEach(function (t) { t.stop(); }); cam.stream = null; }
     cam.lastFrame = null; cam.steady = null; cam.capturing = false; cam.countdownStart = null;
-    cam.selfieSharp = false; cam.docSharp = false; cam.ocrMrz = false; cam.ocrText = '';
+    cam.selfieSharp = false; cam.docSharp = false; cam.ocrMrz = false; cam.ocrText = ''; cam.moireDetected = false;
   }
 
   function camErrorMsg(err) {
@@ -387,6 +392,7 @@
 
   function resetChecks() {
     setCheck('docCheckMrz', false);
+    setCheck('docCheckScreen', false);
     setCheck('docCheckSharp', false);
   }
 
@@ -404,20 +410,24 @@
 
   function monitorDoc(video, gray, rgba, sharp, bright, steady, hintEl, onCapture) {
     var mrz = cam.ocrMrz;
+    var screen = cam.moireDetected;
     runOCRFrame(video);
+    detectMoire(video);
     if (cam.docSharp) { if (sharp < AUTO_MIN_SHARP_DOC_LOW) cam.docSharp = false; }
     else if (sharp > AUTO_MIN_SHARP_DOC) cam.docSharp = true;
     var sharpOk = cam.docSharp;
-    var ready = mrz && sharpOk && steady;
+    var ready = mrz && !screen && sharpOk && steady;
     if (!ready) cam.countdownStart = null;
 
     setCheck('docCheckMrz', mrz);
+    setCheck('docCheckScreen', !screen);
     setCheck('docCheckSharp', sharpOk);
     $('docFrame').classList.toggle('ready', ready);
 
     if (bright <= MIN_BRIGHT) hintEl.textContent = 'Too dark — add some light';
     else if (bright >= MAX_BRIGHT) hintEl.textContent = 'Too bright — reduce glare';
     else if (!mrz) hintEl.textContent = cam.ocrReady ? 'Show the MRZ at the bottom of your document' : 'Loading OCR engine…';
+    else if (screen) hintEl.textContent = 'Screen detected — show the original document';
     else if (!sharpOk) hintEl.textContent = 'MRZ detected — steady your hand';
     else if (!steady) hintEl.textContent = 'Hold steady…';
     else updateCountdown('document', video, hintEl, onCapture);
@@ -487,7 +497,7 @@
       });
       cam.ocrReady = true;
     } catch (e) {
-      console.warn('[OCR] init failed:', e);
+      _warn('[OCR] init failed:', e);
     }
   }
 
@@ -568,9 +578,119 @@
       var mrz = parseMRZText(text);
       cam.ocrMrz = !!mrz;
     } catch (e) {
-      console.warn('[OCR] error:', e);
+      _warn('[OCR] error:', e);
     }
     cam.ocrBusy = false;
+  }
+
+  // ── Moiré / presentation-attack detection (FFT) ──
+  var MOIRE_INTERVAL = 3000;
+  var MOIRE_SIZE = 256;
+  var MOIRE_C = document.createElement('canvas');
+  MOIRE_C.width = MOIRE_SIZE; MOIRE_C.height = MOIRE_SIZE;
+  var MOIRE_CTX = MOIRE_C.getContext('2d', { willReadFrequently: true });
+
+  function fft1d(re, im, n, off) {
+    off = off || 0;
+    var j = 0, i, k, tmp;
+    for (i = 0; i < n; i++) {
+      if (i < j) { tmp = re[off + i]; re[off + i] = re[off + j]; re[off + j] = tmp; tmp = im[off + i]; im[off + i] = im[off + j]; im[off + j] = tmp; }
+      var m = n >> 1;
+      while (m >= 1 && j >= m) { j -= m; m >>= 1; }
+      j += m;
+    }
+    var ang, wr, wi, tr, ti, half = 1;
+    while (half < n) {
+      ang = -Math.PI / half;
+      wr = Math.cos(ang); wi = Math.sin(ang);
+      for (i = 0; i < n; i += half * 2) {
+        var ck = 1, sk = 0;
+        for (k = 0; k < half; k++) {
+          var u = off + i + k, v = u + half;
+          tr = re[v] * ck - im[v] * sk;
+          ti = re[v] * sk + im[v] * ck;
+          re[v] = re[u] - tr; im[v] = im[u] - ti;
+          re[u] += tr; im[u] += ti;
+          var nsk = sk * wr + ck * wi;
+          ck = ck * wr - sk * wi; sk = nsk;
+        }
+      }
+      half <<= 1;
+    }
+  }
+
+  async function detectMoire(video) {
+    if (cam.moireBusy) return;
+    var now = Date.now();
+    if (now - cam.moireLastRun < MOIRE_INTERVAL) return;
+    cam.moireBusy = true;
+    cam.moireLastRun = now;
+    try {
+      var vw = video.videoWidth || 1280;
+      var vh = video.videoHeight || 720;
+      var sq = Math.min(vw, vh);
+      var sx = Math.floor((vw - sq) / 2);
+      var sy = Math.floor((vh - sq) / 2);
+      MOIRE_CTX.drawImage(video, sx, sy, sq, sq, 0, 0, MOIRE_SIZE, MOIRE_SIZE);
+      var img = MOIRE_CTX.getImageData(0, 0, MOIRE_SIZE, MOIRE_SIZE);
+      var d = img.data;
+      var gray = new Float64Array(MOIRE_SIZE * MOIRE_SIZE);
+      var win = new Float64Array(MOIRE_SIZE);
+      for (var i = 0; i < MOIRE_SIZE; i++) win[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (MOIRE_SIZE - 1)));
+      for (var y = 0; y < MOIRE_SIZE; y++) {
+        for (var x = 0; x < MOIRE_SIZE; x++) {
+          var idx = (y * MOIRE_SIZE + x) * 4;
+          var g = (d[idx] * 299 + d[idx + 1] * 587 + d[idx + 2] * 114) / 1000;
+          gray[y * MOIRE_SIZE + x] = g * win[x] * win[y];
+        }
+      }
+      var re = new Float64Array(MOIRE_SIZE * MOIRE_SIZE);
+      var im = new Float64Array(MOIRE_SIZE * MOIRE_SIZE);
+      for (var i = 0; i < MOIRE_SIZE * MOIRE_SIZE; i++) re[i] = gray[i];
+      for (var y = 0; y < MOIRE_SIZE; y++) fft1d(re, im, MOIRE_SIZE, y * MOIRE_SIZE);
+      for (var x = 0; x < MOIRE_SIZE; x++) {
+        var colRe = new Float64Array(MOIRE_SIZE);
+        var colIm = new Float64Array(MOIRE_SIZE);
+        for (var y = 0; y < MOIRE_SIZE; y++) { colRe[y] = re[y * MOIRE_SIZE + x]; colIm[y] = im[y * MOIRE_SIZE + x]; }
+        fft1d(colRe, colIm, MOIRE_SIZE);
+        for (var y = 0; y < MOIRE_SIZE; y++) { re[y * MOIRE_SIZE + x] = colRe[y]; im[y * MOIRE_SIZE + x] = colIm[y]; }
+      }
+      var halfN = MOIRE_SIZE / 2;
+      var sum = 0, count = 0;
+      var mag = new Float64Array(halfN * halfN);
+      for (var fy = 1; fy < halfN; fy++) {
+        for (var fx = 1; fx < halfN; fx++) {
+          var m = Math.sqrt(re[fy * MOIRE_SIZE + fx] * re[fy * MOIRE_SIZE + fx] + im[fy * MOIRE_SIZE + fx] * im[fy * MOIRE_SIZE + fx]);
+          mag[fy * halfN + fx] = m;
+          sum += m; count++;
+        }
+      }
+      var sorted = Array.from(mag).filter(function (v) { return v > 0; }).sort(function (a, b) { return a - b; });
+      var median = sorted[Math.floor(sorted.length * 0.5)] || 1;
+      var maxPeak = sorted[sorted.length - 1] || 0;
+      var ratio = maxPeak / median;
+      var strong = 0;
+      for (var i = 0; i < sorted.length; i++) { if (sorted[i] > median * 10) strong++; }
+      var avg = sum / count;
+      var lowBand = 0, lowCount = 0, midBand = 0, midCount = 0;
+      var rMin = Math.floor(halfN * 0.08), rMax = Math.floor(halfN * 0.70);
+      var rMid1 = Math.floor(halfN * 0.15), rMid2 = Math.floor(halfN * 0.65);
+      for (var fy = 1; fy < halfN; fy++) {
+        for (var fx = 1; fx < halfN; fx++) {
+          var r = Math.sqrt(fy * fy + fx * fx);
+          if (r >= rMin && r < rMax) {
+            lowBand += mag[fy * halfN + fx]; lowCount++;
+            if (r >= rMid1 && r < rMid2) { midBand += mag[fy * halfN + fx]; midCount++; }
+          }
+        }
+      }
+      var lowAvg = lowCount ? lowBand / lowCount : 0;
+      var midAvg = midCount ? midBand / midCount : 0;
+      cam.moireDetected = ratio > 3.5 && strong > 15 && avg > 25 && midAvg > lowAvg * 0.70;
+    } catch (e) {
+      _warn('[Moire] error:', e);
+    }
+    cam.moireBusy = false;
   }
 
   function assessImage(blob) {
