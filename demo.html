@@ -423,6 +423,7 @@
     setCheck('docCheckScreen', !screen);
     setCheck('docCheckSharp', sharpOk);
     $('docFrame').classList.toggle('ready', ready);
+    _log('[Doc] mrz=' + mrz + ' screen=' + screen + ' sharp=' + sharpOk + ' steady=' + steady + ' ready=' + ready + ' sharp_val=' + sharp.toFixed(1) + ' bright=' + bright.toFixed(1));
 
     if (bright <= MIN_BRIGHT) hintEl.textContent = 'Too dark — add some light';
     else if (bright >= MAX_BRIGHT) hintEl.textContent = 'Too bright — reduce glare';
@@ -496,6 +497,7 @@
         tessedit_pageseg_mode: '6'
       });
       cam.ocrReady = true;
+      _log('[OCR] engine ready');
     } catch (e) {
       _warn('[OCR] init failed:', e);
     }
@@ -577,6 +579,7 @@
       cam.ocrText = text;
       var mrz = parseMRZText(text);
       cam.ocrMrz = !!mrz;
+      _log('[OCR] mrz=' + !!mrz + ' text=' + text.substring(0, 80));
     } catch (e) {
       _warn('[OCR] error:', e);
     }
@@ -686,7 +689,8 @@
       }
       var lowAvg = lowCount ? lowBand / lowCount : 0;
       var midAvg = midCount ? midBand / midCount : 0;
-      cam.moireDetected = ratio > 3.5 && strong > 15 && avg > 25 && midAvg > lowAvg * 0.70;
+      cam.moireDetected = ratio > 6.0 && strong > 30 && avg > 40 && midAvg > lowAvg * 0.85;
+      _log('[Moire] ratio=' + ratio.toFixed(1) + ' strong=' + strong + ' avg=' + avg.toFixed(1) + ' midAvg=' + midAvg.toFixed(1) + ' lowAvg=' + lowAvg.toFixed(1) + ' detected=' + cam.moireDetected);
     } catch (e) {
       _warn('[Moire] error:', e);
     }
