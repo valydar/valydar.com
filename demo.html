@@ -569,9 +569,14 @@
   }
 
   function cosineSimilarity(a, b) {
-    var dot = 0;
-    for (var i = 0; i < a.length; i++) dot += a[i] * b[i];
-    return dot;
+    var dot = 0, na = 0, nb = 0;
+    for (var i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      na += a[i] * a[i];
+      nb += b[i] * b[i];
+    }
+    var denom = Math.sqrt(na) * Math.sqrt(nb);
+    return denom > 0 ? dot / denom : 0;
   }
 
   function computeFaceMatch() {
@@ -633,7 +638,7 @@
     if (lines.length < 2) return false;
     var l1 = lines[0], l2 = lines[1];
     if (l1.length < 42 || l1.length > 46) return false;
-    if (l2.length < 42 || l2.length > 46) return false;
+    if (l2.length < 28 || l2.length > 46) return false;
     if (l1.indexOf('P') === -1 && l2.indexOf('P') === -1) return false;
     return true;
   }
