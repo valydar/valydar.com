@@ -265,7 +265,7 @@
 <!-- RESULTS -->
 <div class="results" id="results"></div>
 
-<footer>Valydar — demo runs against the sandbox environment. Nothing is stored.</footer>
+<footer>Valydar — demo runs against the sandbox environment. Nothing is stored. <span id="buildInfo" style="opacity:.6"></span></footer>
 
 <script>
 (function () {
@@ -278,6 +278,24 @@
   var _warn = DEBUG ? console.warn.bind(console) : function () {};
 
   var $ = function (id) { return document.getElementById(id); };
+
+  function showBuildInfo() {
+    var el = $('buildInfo');
+    if (!el) return;
+    fetch('version.json', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (v) {
+        el.textContent = 'UI ' + (v.commit || '?');
+      })
+      .catch(function () { el.textContent = 'UI ?'; });
+    fetch('https://api.dev.valydar.com/health', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (v) {
+        if (v.commit) el.textContent += ' · API ' + v.commit;
+      })
+      .catch(function () {});
+  }
+  showBuildInfo();
 
   var state = {
     doc: null,
