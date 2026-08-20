@@ -728,67 +728,43 @@
         var mSorted = Array.from(mGray).sort(function(a,b){return a-b});
         var mBg = mSorted[Math.floor(mSorted.length * 0.90)];
         var mFg = mSorted[Math.floor(mSorted.length * 0.10)];
+        var mContrast = mBg - mFg;
+        if (mContrast < 20) { cam.ocrBusy = false; return; }
         var mThr = Math.floor((mBg + mFg) / 2);
         for (var i = 0; i < mGray.length; i++) {
           var v = mGray[i] < mThr ? 0 : 255;
           md[i*4] = v; md[i*4+1] = v; md[i*4+2] = v;
         }
         mctx.putImageData(mData, 0, 0);
-        await cam.ocrWorker.setParameters({ tessedit_pageseg_mode: '6' });
-        var mResult = await cam.ocrWorker.recognize(mc);
-        var mText = mResult.data.text || '';
-        _log('[OCR-mrz] text=' + mText.substring(0, 100));
-        mrz = parseMRZText(mText);
-
-        if (!mrz) {
-          var halfH = Math.floor(mc.height / 2);
-          var lineTexts = [];
-          for (var pass = 0; pass < 2; pass++) {
-            var ly = pass * halfH;
-            var lc = document.createElement('canvas');
-            lc.width = mc.width; lc.height = halfH;
-            var lctx = lc.getContext('2d', { willReadFrequently: true });
-            lctx.drawImage(mc, 0, ly, mc.width, halfH, 0, 0, lc.width, lc.height);
-            await cam.ocrWorker.setParameters({ tessedit_pageseg_mode: '7' });
-            var lr = await cam.ocrWorker.recognize(lc);
-            var lt = (lr.data.text || '').replace(/\s+/g, '').trim();
-            lineTexts.push(lt);
-            _log('[OCR-mrz] line' + (pass+1) + '=' + lt);
-          }
+        try {
           await cam.ocrWorker.setParameters({ tessedit_pageseg_mode: '6' });
-          if (lineTexts.length === 2 && lineTexts[0].length >= 28 && lineTexts[1].length >= 28) {
-            var combined = lineTexts[0] + '\n' + lineTexts[1];
-            mrz = parseMRZText(combined);
-          }
-        }
+          var mResult = await cam.ocrWorker.recognize(mc);
+          var mText = mResult.data.text || '';
+          _log('[OCR-mrz] text=' + mText.substring(0, 100));
+          mrz = parseMRZText(mText);
+        } catch (e) { _warn('[OCR-mrz] crop OCR error:', e); }
 
         if (!mrz) {
-          var thresholds = [mThr, Math.floor(mBg * 0.65), Math.floor((mBg + mFg) / 2 + 20)];
-          for (var ti = 0; ti < thresholds.length && !mrz; ti++) {
-            var t = thresholds[ti];
-            for (var pi = 0; pi < mGray.length; pi++) {
-              var vv = mGray[pi] < t ? 0 : 255;
-              md[pi*4] = vv; md[pi*4+1] = vv; md[pi*4+2] = vv;
-            }
-            mctx.putImageData(mData, 0, 0);
-            var halfH2 = Math.floor(mc.height / 2);
-            var lineTexts2 = [];
-            for (var pass2 = 0; pass2 < 2; pass2++) {
-              var ly2 = pass2 * halfH2;
-              var lc2 = document.createElement('canvas');
-              lc2.width = mc.width; lc2.height = halfH2;
-              var lctx2 = lc2.getContext('2d', { willReadFrequently: true });
-              lctx2.drawImage(mc, 0, ly2, mc.width, halfH2, 0, 0, lc2.width, lc2.height);
+          try {
+            var halfH = Math.floor(mc.height / 2);
+            var lineTexts = [];
+            for (var pass = 0; pass < 2; pass++) {
+              var ly = pass * halfH;
+              var lc = document.createElement('canvas');
+              lc.width = mc.width; lc.height = halfH;
+              var lctx = lc.getContext('2d', { willReadFrequently: true });
+              lctx.drawImage(mc, 0, ly, mc.width, halfH, 0, 0, lc.width, lc.height);
               await cam.ocrWorker.setParameters({ tessedit_pageseg_mode: '7' });
-              var lr2 = await cam.ocrWorker.recognize(lc2);
-              lineTexts2.push((lr2.data.text || '').replace(/\s+/g, '').trim());
+              var lr = await cam.ocrWorker.recognize(lc);
+              var lt = (lr.data.text || '').replace(/\s+/g, '').trim();
+              lineTexts.push(lt);
+              _log('[OCR-mrz] line' + (pass+1) + '=' + lt);
             }
-            await cam.ocrWorker.setParameters({ tessedit_pageseg_mode: '6' });
-            if (lineTexts2.length === 2 && lineTexts2[0].length >= 28 && lineTexts2[1].length >= 28) {
-              mrz = parseMRZText(lineTexts2[0] + '\n' + lineTexts2[1]);
-              if (mrz) _log('[OCR-mrz] MRZ found at threshold=' + t);
+            if (lineTexts.length === 2 && lineTexts[0].length >= 28 && lineTexts[1].length >= 28) {
+              var combined = lineTexts[0] + '\n' + lineTexts[1];
+              mrz = parseMRZText(combined);
             }
-          }
+          } catch (e) { _warn('[OCR-mrz] line OCR error:', e); }
         }
 
         if (mrz) {
@@ -796,6 +772,7 @@
           cam.ocrMrzLines = mrz.lines;
           _log('[OCR-mrz] MRZ found in bottom crop: fmt=' + mrz.format);
         }
+        await cam.ocrWorker.setParameters({ tessedit_pageseg_mode: '6' });
       }
     } catch (e) {
       _warn('[OCR] error:', e);
