@@ -282,11 +282,17 @@
   var state = {
     doc: null,
     selfie: null,
-    name: ''
+    name: '',
+    mrzLines: null,
+    ocrText: '',
+    docFaceEmbedding: null,
+    selfieFaceEmbedding: null,
+    faceMatch: null,
+    facePending: null
   };
 
   // ── Live camera capture ──
-  var cam = { stream: null, timer: null, capturing: false, lastFrame: null, steady: null, countdownStart: null, selfieSharp: false, docSharp: false, ocrBusy: false, ocrLastRun: 0, ocrWorker: null, ocrReady: false, ocrMrz: false, ocrText: '', moireBusy: false, moireLastRun: 0, moireDetected: false, steadyFails: 0 };
+  var cam = { stream: null, timer: null, capturing: false, lastFrame: null, steady: null, countdownStart: null, selfieSharp: false, docSharp: false, ocrBusy: false, ocrLastRun: 0, ocrWorker: null, ocrReady: false, ocrMrz: false, ocrText: '', ocrMrzLines: null, moireBusy: false, moireLastRun: 0, moireDetected: false, steadyFails: 0 };
 
   var SAMPLE_W = 480, SAMPLE_H = 360;
   var AUTO_MIN_SHARP = 18, AUTO_MIN_SHARP_LOW = 10, AUTO_MIN_SHARP_DOC = 16, AUTO_MIN_SHARP_DOC_LOW = 8, MIN_BRIGHT = 30, MAX_BRIGHT = 235;
@@ -361,7 +367,13 @@
     var canvas = document.createElement('canvas');
     canvas.width = video.videoWidth || 1280;
     canvas.height = video.videoHeight || 720;
-    canvas.getContext('2d').drawImage(video, 0, 0);
+    var ctx = canvas.getContext('2d');
+    if (kind === 'selfie') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      _log('[CAPTURE] mirroring selfie canvas');
+    }
+    ctx.drawImage(video, 0, 0);
     stopCam();
     canvas.toBlob(function (blob) {
       if (!blob) { cam.capturing = false; return; }
@@ -508,6 +520,109 @@
     }
   }
 
+  // ── Client-side face matching (face-api.js) ──
+  var FACE_CDN = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js';
+  var FACE_MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model';
+  var faceapiLib = null;
+  var faceModelsLoaded = false;
+  var FACE_MATCH_THRESHOLD = 0.40;
+
+  function ensureFaceAPILoaded() {
+    if (faceapiLib) return Promise.resolve();
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = FACE_CDN;
+      s.onload = function () { faceapiLib = window.faceapi; resolve(); };
+      s.onerror = function () { reject(new Error('Failed to load face-api.js')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  async function loadFaceModels() {
+    if (faceModelsLoaded) return;
+    await ensureFaceAPILoaded();
+    await Promise.all([
+      faceapiLib.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+      faceapiLib.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODEL_URL),
+      faceapiLib.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL)
+    ]);
+    faceModelsLoaded = true;
+    _log('[Face] models loaded');
+  }
+
+  async function detectFaceEmbedding(blob) {
+    try {
+      await loadFaceModels();
+      var img = await faceapiLib.bufferToImage(blob);
+      var detection = await faceapiLib
+        .detectSingleFace(img, new faceapiLib.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 }))
+        .withFaceLandmarks(true)
+        .withFaceDescriptor();
+      if (!detection) { _log('[Face] no face detected'); return null; }
+      var emb = Array.from(detection.descriptor);
+      _log('[Face] embedding dim=' + emb.length + ' norm=' + Math.sqrt(emb.reduce(function(s,v){return s+v*v},0)).toFixed(3));
+      return emb;
+    } catch (e) {
+      _warn('[Face] detection failed:', e);
+      return null;
+    }
+  }
+
+  function cosineSimilarity(a, b) {
+    var dot = 0;
+    for (var i = 0; i < a.length; i++) dot += a[i] * b[i];
+    return dot;
+  }
+
+  function computeFaceMatch() {
+    var a = state.docFaceEmbedding, b = state.selfieFaceEmbedding;
+    if (!a || !b) return;
+    var sim = cosineSimilarity(a, b);
+    state.faceMatch = {
+      passed: sim >= FACE_MATCH_THRESHOLD,
+      confidence: Math.round(sim * 1000) / 1000,
+      document_face: { detected: true },
+      selfie_face: { detected: true }
+    };
+    _log('[Face] match confidence=' + state.faceMatch.confidence + (state.faceMatch.passed ? ' PASS' : ' FAIL'));
+  }
+
+  // ── ICAO 9303 check digit validation ──
+  function mrzCharValue(ch) {
+    var c = ch.charCodeAt(0);
+    if (c >= 48 && c <= 57) return c - 48;       // 0-9
+    if (c >= 65 && c <= 90) return c - 55;        // A-Z → 10-35
+    if (ch === '<') return 0;
+    return -1;
+  }
+
+  function mrzCheckDigit(field) {
+    var weights = [7, 3, 1];
+    var sum = 0;
+    for (var i = 0; i < field.length; i++) {
+      var v = mrzCharValue(field[i]);
+      if (v < 0) return -1;
+      sum += v * weights[i % 3];
+    }
+    return sum % 10;
+  }
+
+  function validateMRZCheckDigits(lines) {
+    if (lines.length === 2 && lines[0].length === 44 && lines[1].length === 44) {
+      var l2 = lines[1];
+      var docNumCd = mrzCheckDigit(l2.substring(0, 9));
+      var dobCd = mrzCheckDigit(l2.substring(13, 19));
+      var expCd = mrzCheckDigit(l2.substring(21, 27));
+      var optCd = mrzCheckDigit(l2.substring(28, 43));
+      if (docNumCd >= 0 && l2.charCodeAt(9) - 48 !== docNumCd) return false;
+      if (dobCd >= 0 && l2.charCodeAt(19) - 48 !== dobCd) return false;
+      if (expCd >= 0 && l2.charCodeAt(27) - 48 !== expCd) return false;
+      if (optCd >= 0 && l2.charCodeAt(43) - 48 !== optCd) return false;
+      return true;
+    }
+    return true;
+  }
+
   function parseMRZLine(line) {
     var clean = line.replace(/[^A-Z0-9<]/g, '');
     if (clean.length >= 28 && clean.length <= 50) return clean;
@@ -517,7 +632,8 @@
   function validateMRZTD3(lines) {
     if (lines.length < 2) return false;
     var l1 = lines[0], l2 = lines[1];
-    if (l1.length < 30 || l2.length < 30) return false;
+    if (l1.length < 42 || l1.length > 46) return false;
+    if (l2.length < 42 || l2.length > 46) return false;
     if (l1.indexOf('P') === -1 && l2.indexOf('P') === -1) return false;
     return true;
   }
@@ -525,7 +641,7 @@
   function validateMRZTD1(lines) {
     if (lines.length < 3) return false;
     for (var i = 0; i < 3; i++) {
-      if (lines[i].length < 25 || lines[i].length > 50) return false;
+      if (lines[i].length < 29 || lines[i].length > 31) return false;
     }
     return true;
   }
@@ -538,7 +654,10 @@
       if (parsed) mrzLines.push(parsed);
     }
     if (mrzLines.length >= 2 && validateMRZTD3(mrzLines.slice(0, 2))) {
-      return { format: 'TD3', lines: mrzLines.slice(0, 2) };
+      var lines2 = mrzLines.slice(0, 2);
+      if (validateMRZCheckDigits(lines2)) {
+        return { format: 'TD3', lines: lines2 };
+      }
     }
     if (mrzLines.length >= 3 && validateMRZTD1(mrzLines.slice(0, 3))) {
       return { format: 'TD1', lines: mrzLines.slice(0, 3) };
@@ -555,11 +674,10 @@
     try {
       var vw = video.videoWidth || 1280;
       var vh = video.videoHeight || 720;
-      var sx = 0, sy = Math.floor(vh * 0.55), sw = vw, sh = Math.floor(vh * 0.45);
+      var sx = 0, sy = 0, sw = vw, sh = vh;
       if (sw < 100 || sh < 20) { cam.ocrBusy = false; return; }
       var c = document.createElement('canvas');
-      var scale = Math.max(1, Math.ceil(1200 / sw));
-      c.width = sw * scale; c.height = sh * scale;
+      c.width = sw; c.height = sh;
       var ctx = c.getContext('2d', { willReadFrequently: true });
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
@@ -584,7 +702,8 @@
       cam.ocrText = text;
       var mrz = parseMRZText(text);
       cam.ocrMrz = !!mrz;
-      _log('[OCR] mrz=' + !!mrz + ' text=' + text.substring(0, 80));
+      cam.ocrMrzLines = mrz ? mrz.lines : null;
+      _log('[OCR] mrz=' + !!mrz + ' fmt=' + (mrz ? mrz.format : '-') + ' text=' + text.substring(0, 80));
     } catch (e) {
       _warn('[OCR] error:', e);
     }
@@ -784,6 +903,8 @@
     $(ids.start).addEventListener('click', begin);
     $(ids.retake).addEventListener('click', function () {
       captured = null;
+      state.mrzLines = null;
+      state.ocrText = '';
       $(ids.capture).style.display = 'none';
       onDone(null);
       begin();
@@ -807,8 +928,28 @@
     });
   }
 
-  wireCapture('doc', 'document', function (blob) { state.doc = blob; updateRun(); });
-  wireCapture('selfie', 'selfie', function (blob) { state.selfie = blob; updateRun(); });
+  wireCapture('doc', 'document', function (blob) {
+    state.doc = blob;
+    state.mrzLines = cam.ocrMrzLines;
+    state.ocrText = cam.ocrText;
+    state.facePending = detectFaceEmbedding(blob).then(function (emb) {
+      state.docFaceEmbedding = emb;
+      computeFaceMatch();
+      state.facePending = null;
+      updateRun();
+    });
+    updateRun();
+  });
+  wireCapture('selfie', 'selfie', function (blob) {
+    state.selfie = blob;
+    state.facePending = detectFaceEmbedding(blob).then(function (emb) {
+      state.selfieFaceEmbedding = emb;
+      computeFaceMatch();
+      state.facePending = null;
+      updateRun();
+    });
+    updateRun();
+  });
 
   $('selfieSkip').addEventListener('click', function (e) {
     e.preventDefault();
@@ -833,34 +974,51 @@
       $('loading').style.display = 'block';
       $('loadingText').textContent = 'Running document check & MRZ reading…';
 
-      var fd = new FormData();
-      fd.append('file', state.doc);
-      if (state.selfie) {
-        fd.append('selfie', state.selfie);
-        $('loadingText').textContent = 'Matching the face on your document with your selfie…';
-      }
-      fetch(API, { method: 'POST', body: fd })
-        .then(function (res) {
-          return res.json().then(function (data) {
-            return { ok: res.ok, data: data };
+      var promise = state.facePending ? state.facePending : Promise.resolve();
+      promise.then(function () {
+        var fd = new FormData();
+        fd.append('file', state.doc);
+        if (state.mrzLines) {
+          fd.append('mrz_lines', JSON.stringify(state.mrzLines));
+        }
+        if (state.ocrText) {
+          fd.append('ocr_text', state.ocrText);
+        }
+        if (state.selfie) {
+          fd.append('selfie', state.selfie);
+          $('loadingText').textContent = 'Matching the face on your document with your selfie…';
+        }
+        if (state.faceMatch) {
+          fd.append('face_match', JSON.stringify(state.faceMatch));
+        }
+        fetch(API, { method: 'POST', body: fd })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { ok: res.ok, data: data };
+            });
+          })
+          .then(function (result) {
+            if (!result.ok) {
+              throw new Error((result.data && result.data.error && result.data.error.message) ||
+                'Verification failed — please try again.');
+            }
+            renderResults(result.data);
+          })
+          .catch(function (err) {
+            $('loading').style.display = 'none';
+            $('wizard').style.display = 'grid';
+            showError(err.message || 'Something went wrong. Please try again.');
+          })
+          .finally(function () {
+            $('loading').style.display = 'none';
+            btn.disabled = false;
           });
-        })
-        .then(function (result) {
-          if (!result.ok) {
-            throw new Error((result.data && result.data.error && result.data.error.message) ||
-              'Verification failed — please try again.');
-          }
-          renderResults(result.data);
-        })
-        .catch(function (err) {
-          $('loading').style.display = 'none';
-          $('wizard').style.display = 'grid';
-          showError(err.message || 'Something went wrong. Please try again.');
-        })
-        .finally(function () {
-          $('loading').style.display = 'none';
-          btn.disabled = false;
-        });
+      }).catch(function (err) {
+        $('loading').style.display = 'none';
+        $('wizard').style.display = 'grid';
+        showError(err.message || 'Something went wrong. Please try again.');
+        btn.disabled = false;
+      });
     } catch (err) {
       showError('Error: ' + err.message);
     }
