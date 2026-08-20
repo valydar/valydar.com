@@ -679,17 +679,16 @@
     try {
       var vw = video.videoWidth || 1280;
       var vh = video.videoHeight || 720;
-      var sx = 0, sy = 0, sw = vw, sh = vh;
-      if (sw < 100 || sh < 20) { cam.ocrBusy = false; return; }
+      if (vw < 100 || vh < 20) { cam.ocrBusy = false; return; }
       var c = document.createElement('canvas');
-      c.width = sw; c.height = sh;
+      c.width = vw; c.height = vh;
       var ctx = c.getContext('2d', { willReadFrequently: true });
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height);
-      var imgData = ctx.getImageData(0, 0, c.width, c.height);
+      ctx.drawImage(video, 0, 0, vw, vh, 0, 0, vw, vh);
+      var imgData = ctx.getImageData(0, 0, vw, vh);
       var d = imgData.data;
-      var grayVals = new Uint8Array(c.width * c.height);
+      var grayVals = new Uint8Array(vw * vh);
       for (var i = 0; i < grayVals.length; i++) {
         grayVals[i] = (d[i*4]*299 + d[i*4+1]*587 + d[i*4+2]*114) / 1000;
       }
@@ -709,6 +708,43 @@
       cam.ocrMrz = !!mrz;
       cam.ocrMrzLines = mrz ? mrz.lines : null;
       _log('[OCR] mrz=' + !!mrz + ' fmt=' + (mrz ? mrz.format : '-') + ' text=' + text.substring(0, 80));
+
+      if (!mrz) {
+        var cropH = Math.floor(vh * 0.30);
+        var cropY = vh - cropH;
+        var sc = 2;
+        var mc = document.createElement('canvas');
+        mc.width = vw * sc; mc.height = cropH * sc;
+        var mctx = mc.getContext('2d', { willReadFrequently: true });
+        mctx.imageSmoothingEnabled = true;
+        mctx.imageSmoothingQuality = 'high';
+        mctx.drawImage(video, 0, cropY, vw, cropH, 0, 0, mc.width, mc.height);
+        var mData = mctx.getImageData(0, 0, mc.width, mc.height);
+        var md = mData.data;
+        var mGray = new Uint8Array(mc.width * mc.height);
+        for (var i = 0; i < mGray.length; i++) {
+          mGray[i] = (md[i*4]*299 + md[i*4+1]*587 + md[i*4+2]*114) / 1000;
+        }
+        var mSorted = Array.from(mGray).sort(function(a,b){return a-b});
+        var mBg = mSorted[Math.floor(mSorted.length * 0.85)];
+        var mFg = mSorted[Math.floor(mSorted.length * 0.15)];
+        var mThr = Math.floor((mBg + mFg) / 2);
+        for (var i = 0; i < mGray.length; i++) {
+          var v = mGray[i] < mThr ? 0 : 255;
+          md[i*4] = v; md[i*4+1] = v; md[i*4+2] = v;
+        }
+        mctx.putImageData(mData, 0, 0);
+        var mResult = await cam.ocrWorker.recognize(mc);
+        var mText = mResult.data.text || '';
+        _log('[OCR-mrz] text=' + mText.substring(0, 100));
+        var mrz2 = parseMRZText(mText);
+        if (mrz2) {
+          mrz = mrz2;
+          cam.ocrMrz = true;
+          cam.ocrMrzLines = mrz.lines;
+          _log('[OCR-mrz] MRZ found in bottom crop: fmt=' + mrz.format);
+        }
+      }
     } catch (e) {
       _warn('[OCR] error:', e);
     }
