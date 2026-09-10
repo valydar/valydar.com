@@ -250,7 +250,44 @@
     </div>
   </div>
 
-  <!-- Step 3: AML -->
+  <!-- Step 3: Liveness (optional) -->
+  <div class="step" id="stepLiveness" style="display:none">
+    <div class="step-head">
+      <div class="step-num">3</div>
+      <div>
+        <h2>Liveness check <span class="optional">optional</span></h2>
+        <div class="sub">Follow the instruction so we can confirm it's really you — not a photo or video.</div>
+      </div>
+    </div>
+    <div class="cam" id="liveCam">
+      <div class="cam-start" id="liveStartBox">
+        <div class="cam-icon">🫨</div>
+        <p><strong>Active liveness</strong> — we'll show a random instruction (blink, turn your head, nod, or smile) and record a short burst to verify motion.</p>
+        <button class="btn btn-primary" id="liveStart">📷 Start liveness check</button>
+        <a href="#" class="cam-skip" id="liveSkip">Skip — passive only</a>
+        <p class="cam-note" id="liveCamError"></p>
+      </div>
+      <div class="cam-stage mirror" id="liveStage">
+        <video id="liveVideo" autoplay playsinline muted></video>
+        <div class="cam-overlay">
+          <div class="cam-frame selfie" id="liveFrame"></div>
+          <div class="cam-hint" id="liveHint">Getting ready…</div>
+        </div>
+      </div>
+    </div>
+    <div class="capture-preview" id="liveCapture">
+      <div class="capture-info">
+        <div class="capture-name" id="liveResult">Liveness captured</div>
+        <div class="quality" id="liveQuality"></div>
+        <div class="capture-actions">
+          <button class="btn btn-secondary" id="liveRetake">↻ Retry</button>
+          <button class="btn btn-primary" id="liveContinue">Continue →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Run -->
   <div class="run-row" id="runRow" style="display:none">
     <button class="btn btn-primary" id="runBtn" disabled>Run verification →</button>
   </div>
@@ -1009,11 +1046,8 @@
         $('stepSelfie').style.display = '';
         $('stepSelfie').scrollIntoView({ behavior: 'smooth' });
       } else {
-        try {
-          runVerification();
-        } catch (err) {
-          showError('Error starting verification: ' + err.message);
-        }
+        $('stepLiveness').style.display = '';
+        $('stepLiveness').scrollIntoView({ behavior: 'smooth' });
       }
     });
   }
@@ -1048,6 +1082,119 @@
     $('runBtn').scrollIntoView({ behavior: 'smooth' });
   });
 
+  // ── Active liveness (optional) ──
+  var LIVENESS_CHALLENGES = [
+    { type: 'blink', instruction: 'Blink your eyes once' },
+    { type: 'turn_left', instruction: 'Turn your head slowly to the left' },
+    { type: 'turn_right', instruction: 'Turn your head slowly to the right' },
+    { type: 'nod', instruction: 'Nod your head up and down' },
+    { type: 'smile', instruction: 'Smile at the camera' }
+  ];
+  var liveness = { challenge: null, frames: [], stream: null, running: false };
+
+  function pickLivenessChallenge() {
+    return LIVENESS_CHALLENGES[Math.floor(Math.random() * LIVENESS_CHALLENGES.length)];
+  }
+
+  function liveFrameToBlob(video, w, h) {
+    return new Promise(function (resolve) {
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(video, 0, 0, w, h);
+      c.toBlob(resolve, 'image/jpeg', 0.7);
+    });
+  }
+
+  function stopLiveStream() {
+    if (liveness.stream) {
+      liveness.stream.getTracks().forEach(function (t) { t.stop(); });
+      liveness.stream = null;
+    }
+  }
+
+  function finishLiveness() {
+    liveness.running = false;
+    stopLiveStream();
+    $('liveStage').style.display = 'none';
+    $('liveCapture').style.display = 'flex';
+    $('liveResult').textContent = 'Liveness captured (' + liveness.frames.length + ' frames)';
+    $('liveQuality').innerHTML = '<span class="quality ok">✓ ' + (liveness.challenge ? liveness.challenge.instruction : '') + '</span>';
+    if (liveness.frames.length < 3) {
+      $('liveQuality').innerHTML = '<span class="quality fail">✕ Not enough frames captured — retry</span>';
+    }
+  }
+
+  function startLiveness() {
+    var video = $('liveVideo');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      $('liveCamError').textContent = 'Camera capture isn\'t supported in this browser.';
+      $('liveCamError').style.display = 'block';
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    }).then(function (stream) {
+      liveness.stream = stream;
+      liveness.challenge = pickLivenessChallenge();
+      liveness.frames = [];
+      video.srcObject = stream;
+      var p = video.play();
+      if (p && p.catch) p.catch(function () {});
+      $('liveStartBox').style.display = 'none';
+      $('liveStage').style.display = 'block';
+      $('liveCamError').style.display = 'none';
+      $('liveHint').textContent = liveness.challenge.instruction;
+
+      var start = Date.now();
+      var duration = 2400, interval = 220;
+      liveness.running = true;
+
+      function tick() {
+        if (!liveness.running) return;
+        var elapsed = Date.now() - start;
+        if (elapsed < 450) { setTimeout(tick, 120); return; } // settle + read instruction
+        if (elapsed >= duration) { finishLiveness(); return; }
+        var vw = video.videoWidth || 640;
+        var vh = video.videoHeight || 480;
+        if (vw > 0) {
+          liveFrameToBlob(video, 480, Math.max(1, Math.round(480 * vh / vw))).then(function (blob) {
+            if (blob && liveness.frames.length < 24) liveness.frames.push(blob);
+          });
+        }
+        $('liveHint').textContent = liveness.challenge.instruction + ' (' + Math.max(0, Math.ceil((duration - elapsed) / 1000)) + 's)';
+        setTimeout(tick, interval);
+      }
+      setTimeout(tick, 200);
+    }).catch(function (err) {
+      $('liveCamError').textContent = camErrorMsg(err);
+      $('liveCamError').style.display = 'block';
+    });
+  }
+
+  $('liveStart').addEventListener('click', startLiveness);
+  $('liveRetake').addEventListener('click', function () {
+    stopLiveStream();
+    liveness.frames = [];
+    liveness.challenge = null;
+    $('liveCapture').style.display = 'none';
+    $('liveStartBox').style.display = '';
+  });
+  $('liveSkip').addEventListener('click', function (e) {
+    e.preventDefault();
+    stopLiveStream();
+    $('stepLiveness').classList.add('done');
+    $('runRow').style.display = '';
+    $('runBtn').scrollIntoView({ behavior: 'smooth' });
+  });
+  $('liveContinue').addEventListener('click', function () {
+    stopLiveStream();
+    $('stepLiveness').classList.add('done');
+    $('stepLiveness').querySelector('.step-num').textContent = '✓';
+    $('runRow').style.display = '';
+    $('runBtn').scrollIntoView({ behavior: 'smooth' });
+  });
+
   // ── Run ──
   function updateRun() {
     $('runBtn').disabled = !state.doc;
@@ -1072,6 +1219,13 @@
         // lines are only sent when the user entered them manually as a fallback.
         if (Array.isArray(manualMrz) && manualMrz.length) {
           fd.append('mrz_lines', JSON.stringify(manualMrz));
+        }
+        if (liveness.challenge && liveness.frames.length >= 3) {
+          fd.append('liveness_challenge', liveness.challenge.type);
+          liveness.frames.forEach(function (blob) {
+            fd.append('liveness_frames', blob, 'frame.jpg');
+          });
+          $('loadingText').textContent = 'Running liveness check…';
         }
         if (state.selfie) {
           fd.append('selfie', state.selfie);
@@ -1212,6 +1366,25 @@
       html += '<div class="metric"><span>Confidence</span><span>' + conf + '%</span></div>';
     } else {
       html += '<p style="color:var(--muted);font-size:14px">Add a selfie in step 2 to run a face match against your document.</p>';
+    }
+    html += '</div>';
+
+    // ── Active liveness ──
+    var al = data.active_liveness;
+    html += '<div class="result-card">';
+    html += '<h3>🫨 Active liveness <span>' + (al ? badge(al.passed) : badge(null, 'Skipped')) + '</span></h3>';
+    if (al) {
+      html += '<p style="color:var(--muted);font-size:14px">Challenge: ' + esc(al.instructions || al.challenge || '') + '</p>';
+      var alscore = Math.round((al.score || 0) * 100);
+      html += '<div class="bar"><span style="width:' + alscore + '%"></span></div>';
+      html += '<div class="metric"><span>Score</span><span>' + alscore + '%</span></div>';
+      if (al.checks && al.checks.length) {
+        html += '<div class="checks">' + al.checks.map(function (c) {
+          return '<span class="chip ' + (c.passed ? 'ok' : 'no') + '">' + esc(c.name) + (c.passed ? ' ✓' : ' ✕') + '</span>';
+        }).join('') + '</div>';
+      }
+    } else {
+      html += '<p style="color:var(--muted);font-size:14px">Add the optional liveness step to verify motion (blink / head turn / nod / smile).</p>';
     }
     html += '</div>';
 
