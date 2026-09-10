@@ -446,7 +446,9 @@
     if (cam.docSharp) { if (sharp < AUTO_MIN_SHARP_DOC_LOW) cam.docSharp = false; }
     else if (sharp > AUTO_MIN_SHARP_DOC) cam.docSharp = true;
     var sharpOk = cam.docSharp;
-    var ready = mrz && !screen && sharpOk && steady;
+    // Capture is gated on framing quality only (sharp + steady + no screen).
+    // Client-side MRZ OCR is an optional hint and never blocks the capture.
+    var ready = !screen && sharpOk && steady;
     if (!ready && steady) cam.steadyFails = 0;
     if (!ready && !steady) {
       cam.steadyFails++;
@@ -462,10 +464,10 @@
 
     if (bright <= MIN_BRIGHT) hintEl.textContent = 'Too dark — add some light';
     else if (bright >= MAX_BRIGHT) hintEl.textContent = 'Too bright — reduce glare';
-    else if (!mrz) hintEl.textContent = cam.ocrReady ? 'Show the MRZ at the bottom of your document' : 'Loading OCR engine…';
     else if (screen) hintEl.textContent = 'Screen detected — show the original document';
-    else if (!sharpOk) hintEl.textContent = 'MRZ detected — steady your hand';
-    else if (!ready) hintEl.textContent = 'Hold steady…';
+    else if (!sharpOk) hintEl.textContent = 'Blurry — steady your hand';
+    else if (!steady) hintEl.textContent = 'Hold steady — keep the MRZ lines at the bottom in view';
+    else if (mrz) hintEl.textContent = 'MRZ detected — hold steady';
     else updateCountdown('document', video, hintEl, onCapture);
   }
 
@@ -1051,7 +1053,7 @@
     $('runBtn').disabled = !state.doc;
   }
 
-  function runVerification() {
+  function runVerification(manualMrz) {
     try {
       var btn = $('runBtn');
       btn.disabled = true;
@@ -1066,11 +1068,10 @@
       promise.then(function () {
         var fd = new FormData();
         fd.append('file', state.doc);
-        if (state.mrzLines) {
-          fd.append('mrz_lines', JSON.stringify(state.mrzLines));
-        }
-        if (state.ocrText) {
-          fd.append('ocr_text', state.ocrText);
+        // Server-side OCR parses the MRZ from the captured photo. Client OCR
+        // lines are only sent when the user entered them manually as a fallback.
+        if (Array.isArray(manualMrz) && manualMrz.length) {
+          fd.append('mrz_lines', JSON.stringify(manualMrz));
         }
         if (state.selfie) {
           fd.append('selfie', state.selfie);
@@ -1174,6 +1175,14 @@
       html += '<p style="color:var(--error);font-size:14px;font-weight:600">This doesn\'t look like a valid passport — the MRZ couldn\'t be read or validated.</p>';
       html += '<p style="color:var(--muted);font-size:14px">Make sure the data page is in focus with the two MRZ lines at the bottom clearly visible, then retake.</p>';
     }
+    if (!d.mrz_parsed) {
+      html += '<div class="manual-mrz">';
+      html += '<p style="color:var(--muted);font-size:13px;margin:10px 0 4px">Or enter the two MRZ lines from the bottom of the document:</p>';
+      html += '<input id="mrzLine1" placeholder="Line 1 — e.g. P&lt;UTOERIKSSON&lt;&lt;ANNA&lt;MARIA" spellcheck="false" autocapitalize="characters" style="font-family:monospace;width:100%;box-sizing:border-box;padding:8px;margin:4px 0;background:var(--surface);border:1px solid var(--border);color:var(--white);border-radius:6px">';
+      html += '<input id="mrzLine2" placeholder="Line 2 — e.g. L898902C&lt;3UTO6908061F9406236Z184226B&lt;&lt;&lt;&lt;&lt;" spellcheck="false" autocapitalize="characters" style="font-family:monospace;width:100%;box-sizing:border-box;padding:8px;margin:4px 0;background:var(--surface);border:1px solid var(--border);color:var(--white);border-radius:6px">';
+      html += '<button class="btn btn-primary" id="mrzManualBtn" style="margin-top:6px">Verify with MRZ</button>';
+      html += '</div>';
+    }
     var checks = [];
     checks.push(['MRZ read', d.ocr_detected === true]);
     checks.push(['MRZ parsed', d.mrz_parsed === true]);
@@ -1232,6 +1241,20 @@
     html += '</div>';
 
     $('results').innerHTML = html;
+    var mrzManualBtn = $('mrzManualBtn');
+    if (mrzManualBtn) {
+      mrzManualBtn.addEventListener('click', function () {
+        var l1 = $('mrzLine1').value.toUpperCase().trim();
+        var l2 = $('mrzLine2').value.toUpperCase().trim();
+        if (!l1 || !l2) {
+          showError('Enter both MRZ lines before verifying.');
+          return;
+        }
+        $('results').style.display = 'none';
+        $('results').scrollIntoView({ behavior: 'smooth' });
+        runVerification([l1, l2]);
+      });
+    }
     $('loading').style.display = 'none';
     $('results').style.display = 'block';
     $('results').scrollIntoView({ behavior: 'smooth' });
